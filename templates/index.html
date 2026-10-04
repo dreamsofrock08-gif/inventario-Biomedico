@@ -6,7 +6,7 @@
     <title>Inventario de Equipos Médicos</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
-        .container { max-width: 900px; margin: 0 auto; }
+        .container { max-width: 950px; margin: 0 auto; }
         .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h2, h3 { color: #1e3a8a; margin-top: 0; }
         .form-group { margin-bottom: 15px; }
@@ -39,7 +39,7 @@
             <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
             <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
         </div>
-        <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube un nuevo Excel para alimentar la base de datos o usa "Vaciar BD Actual" si deseas iniciar desde cero con otra institución.</p>
+        <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube un archivo Excel para alimentar la base de datos.</p>
         
         <form id="excelForm" enctype="multipart/form-data">
             <div class="form-group">
@@ -57,9 +57,15 @@
         <div id="alertBox" class="alert"></div>
 
         <form id="equipoForm">
-            <div class="form-group">
-                <label for="serial">Número de Serial / Serie *</label>
-                <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                    <label for="serial">Número de Serial / Serie *</label>
+                    <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
+                </div>
+                <div style="flex: 1;">
+                    <label for="numero_inventario">No. Inventario / Activo Fijo</label>
+                    <input type="text" id="numero_inventario" placeholder="Ej: 153200031083">
+                </div>
             </div>
 
             <div class="form-group">
@@ -104,7 +110,7 @@
         </div>
 
         <div class="form-group">
-            <input type="text" id="inputBuscar" placeholder="🔍 Buscar por nombre, serial, marca o ubicación..." onkeyup="buscarEquipos()">
+            <input type="text" id="inputBuscar" placeholder="🔍 Buscar por serial, No. Inventario, nombre, marca o ubicación..." onkeyup="buscarEquipos()">
         </div>
 
         <div style="max-height: 400px; overflow-y: auto;">
@@ -112,6 +118,7 @@
                 <thead>
                     <tr>
                         <th>Serial</th>
+                        <th>No. Inventario</th>
                         <th>Nombre</th>
                         <th>Marca</th>
                         <th>Modelo</th>
@@ -120,7 +127,7 @@
                     </tr>
                 </thead>
                 <tbody id="tablaEquipos">
-                    <tr><td colspan="6">Cargando registros...</td></tr>
+                    <tr><td colspan="7">Cargando registros...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -148,7 +155,7 @@
         if (data.existe) {
             alertBox.className = 'alert alert-danger';
             alertBox.innerHTML = `⚠️ <strong>¡EQUIPO REPETIDO!</strong><br>
-                El serial ya existe como: <strong>${data.equipo.nombre}</strong> (${data.equipo.marca} ${data.equipo.modelo}) en <em>${data.equipo.ubicacion}</em>.`;
+                El serial ya existe como: <strong>${data.equipo.nombre}</strong> (Inv: ${data.equipo.numero_inventario}) - ${data.equipo.marca} ${data.equipo.modelo} en <em>${data.equipo.ubicacion}</em>.`;
             alertBox.style.display = 'block';
             btnGuardar.disabled = true;
         } else {
@@ -164,6 +171,7 @@
         e.preventDefault();
         const payload = {
             serial: document.getElementById('serial').value,
+            numero_inventario: document.getElementById('numero_inventario').value,
             nombre: document.getElementById('nombre').value,
             marca: document.getElementById('marca').value,
             modelo: document.getElementById('modelo').value,
@@ -254,13 +262,14 @@
         const tbody = document.getElementById('tablaEquipos');
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6b7280;">No hay equipos en la base de datos. Carga un Excel o registra uno individual.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#6b7280;">No hay equipos en la base de datos. Carga un Excel o registra uno individual.</td></tr>';
             return;
         }
 
         tbody.innerHTML = data.map(eq => `
             <tr>
                 <td><strong>${eq.serial}</strong></td>
+                <td>${eq.numero_inventario ? eq.numero_inventario : '-'}</td>
                 <td>${eq.nombre}</td>
                 <td>${eq.marca}</td>
                 <td>${eq.modelo}</td>
