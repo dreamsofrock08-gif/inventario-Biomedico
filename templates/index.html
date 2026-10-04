@@ -20,6 +20,8 @@
         button:disabled { background-color: #9ca3af; cursor: not-allowed; }
         .btn-excel { background-color: #059669; }
         .btn-excel:hover { background-color: #047857; }
+        .btn-danger { background-color: #dc2626; width: auto; font-size: 14px; padding: 8px 15px; }
+        .btn-danger:hover { background-color: #b91c1c; }
         .btn-descargar { background-color: #0284c7; width: auto; display: inline-block; padding: 10px 20px; text-decoration: none; color: white; border-radius: 4px; font-weight: bold; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
         th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
@@ -33,7 +35,12 @@
 
     <!-- SECCIÓN 1: CARGA MASIVA DESDE EXCEL -->
     <div class="card">
-        <h3>📁 Cargar Base de Datos desde Excel</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
+            <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
+        </div>
+        <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube un nuevo Excel para alimentar la base de datos o usa "Vaciar BD Actual" si deseas iniciar desde cero con otra institución.</p>
+        
         <form id="excelForm" enctype="multipart/form-data">
             <div class="form-group">
                 <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
@@ -223,6 +230,23 @@
         }
     });
 
+    // Vaciar Base de Datos
+    async function limpiarBaseDatos() {
+        if (!confirm("⚠️ ¿Estás seguro de vaciar toda la base de datos actual? Esta acción no se puede deshacer.")) {
+            return;
+        }
+
+        const res = await fetch('/limpiar-bd', { method: 'POST' });
+        const data = await res.json();
+
+        if (res.ok) {
+            alert("🧹 " + data.message);
+            cargarEquipos();
+        } else {
+            alert("❌ Error: " + data.message);
+        }
+    }
+
     // Cargar y filtrar equipos en la tabla
     async function cargarEquipos(query = '') {
         const res = await fetch(`/listar-equipos?q=${encodeURIComponent(query)}`);
@@ -230,7 +254,7 @@
         const tbody = document.getElementById('tablaEquipos');
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">No se encontraron equipos.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6b7280;">No hay equipos en la base de datos. Carga un Excel o registra uno individual.</td></tr>';
             return;
         }
 
@@ -255,7 +279,6 @@
         }, 300);
     }
 
-    // Carga inicial
     cargarEquipos();
 </script>
 
