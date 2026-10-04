@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 import sqlite3
 import pandas as pd
@@ -88,8 +88,6 @@ def cargar_excel():
 
     try:
         file_bytes = io.BytesIO(file.read())
-        
-        # Leer las primeras 15 filas sin encabezado para buscar la fila de nombres de columna real
         df_raw = pd.read_excel(file_bytes, header=None)
         
         header_row_index = None
@@ -100,16 +98,12 @@ def cargar_excel():
                 break
 
         if header_row_index is None:
-            header_row_index = 0  # Caer de respaldo en la fila 0 si no se detecta la fila
+            header_row_index = 0
 
-        # Volver al inicio del stream para re-leer con el encabezado correcto
         file_bytes.seek(0)
         df = pd.read_excel(file_bytes, header=header_row_index)
-
-        # Normalizar nombres de columnas a mayúsculas
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # Mapear variaciones comunes de encabezados en el formato PMP
         columnas_posibles_serial = ['SERIE', 'SERIAL', 'NO. INVENTARIO', 'S/N', 'NUMERO_SERIAL']
         col_serial = next((col for col in columnas_posibles_serial if col in df.columns), None)
 
@@ -117,10 +111,7 @@ def cargar_excel():
         col_nombre = next((col for col in columnas_posibles_nombre if col in df.columns), None)
 
         if not col_serial or not col_nombre:
-            return jsonify({
-                "status": "error", 
-                "message": "No se encontraron las columnas 'Nombre del equipo' y 'Serie' en el archivo."
-            }), 400
+            return jsonify({"status": "error", "message": "No se encontraron las columnas 'Nombre del equipo' y 'Serie' en el archivo."}), 400
 
         col_marca = next((col for col in ['MARCA'] if col in df.columns), None)
         col_modelo = next((col for col in ['MODELO'] if col in df.columns), None)
@@ -159,11 +150,58 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f" Carga completada. Equipos nuevos registrados: {agregados}. Equipos omitidos (serial duplicado): {omitidos_duplicados}."
+            "message": f"Carga completada. Equipos nuevos registrados: {agregados}. Equipos omitidos (serial duplicado): {omitidos_duplicados}."
         })
 
     except Exception as e:
         return jsonify({"status": "error", "message": f"Error procesando Excel: {str(e)}"}), 500
+
+@app.route('/listar-equipos', methods=['GET'])
+def listar_equipos():
+    """Retorna la lista de equipos o filtra por término de búsqueda."""
+    query = request.args.get('q', '').strip()
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    if query:
+        search_pattern = f"%{query}%"
+        cursor.execute('''
+            SELECT id, nombre, marca, modelo, serial, ubicacion, estado 
+            FROM equipos 
+            WHERE nombre LIKE ? OR serial LIKE ? OR marca LIKE ? OR ubicacion LIKE ?
+            ORDER BY id DESC LIMIT 100
+        ''', (search_pattern, search_pattern, search_pattern, search_pattern))
+    else:
+        cursor.execute('SELECT id, nombre, marca, modelo, serial, ubicacion, estado FROM equipos ORDER BY id DESC LIMIT 100')
+
+    filas = cursor.fetchall()
+    conn.close()
+
+    equipos = [{
+        "id": f[0], "nombre": f[1], "marca": f[2], "modelo": f[3],
+        "serial": f[4], "ubicacion": f[5], "estado": f[6]
+    } for f in filas]
+
+    return jsonify(equipos)
+
+@app.route('/descargar-excel', methods=['GET'])
+def descargar_excel():
+    """Genera y descarga un archivo Excel con toda la base de datos acumulada."""
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, serial AS SERIAL, ubicacion AS UBICACION, estado AS ESTADO FROM equipos", conn)
+    conn.close()
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Inventario_General')
+    
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='Inventario_Biomedico_Actualizado.xlsx'
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
