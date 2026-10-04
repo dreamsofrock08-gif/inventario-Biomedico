@@ -156,9 +156,21 @@ def cargar_excel():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Error procesando Excel: {str(e)}"}), 500
 
+@app.route('/limpiar-bd', methods=['POST'])
+def limpiar_bd():
+    """Elimina todos los registros de la base de datos para cargar una nueva sede desde cero."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM equipos')
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "message": "Base de datos vaciada por completo. Puedes cargar un nuevo Excel."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error al reiniciar BD: {str(e)}"}), 500
+
 @app.route('/listar-equipos', methods=['GET'])
 def listar_equipos():
-    """Retorna la lista de equipos o filtra por término de búsqueda."""
     query = request.args.get('q', '').strip()
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -186,7 +198,6 @@ def listar_equipos():
 
 @app.route('/descargar-excel', methods=['GET'])
 def descargar_excel():
-    """Genera y descarga un archivo Excel con toda la base de datos acumulada."""
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, serial AS SERIAL, ubicacion AS UBICACION, estado AS ESTADO FROM equipos", conn)
     conn.close()
