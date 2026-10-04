@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventario de Equipos Médicos</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f9; }
-        .container { max-width: 600px; margin: 0 auto; }
-        .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h2, h3 { color: #1e3a8a; margin-top: 0; }
         .form-group { margin-bottom: 15px; }
         label { display: block; font-weight: bold; margin-bottom: 5px; }
@@ -20,7 +20,11 @@
         button:disabled { background-color: #9ca3af; cursor: not-allowed; }
         .btn-excel { background-color: #059669; }
         .btn-excel:hover { background-color: #047857; }
-        hr { border: 0; height: 1px; background: #e5e7eb; margin: 20px 0; }
+        .btn-descargar { background-color: #0284c7; width: auto; display: inline-block; padding: 10px 20px; text-decoration: none; color: white; border-radius: 4px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+        th { background-color: #f3f4f6; color: #1f2937; }
+        tr:nth-child(even) { background-color: #f9fafb; }
     </style>
 </head>
 <body>
@@ -30,11 +34,8 @@
     <!-- SECCIÓN 1: CARGA MASIVA DESDE EXCEL -->
     <div class="card">
         <h3>📁 Cargar Base de Datos desde Excel</h3>
-        <p style="font-size: 14px; color: #4b5563;">Sube tu archivo `.xlsx` o `.xls`. El sistema leerá las columnas <strong>NOMBRE</strong>, <strong>SERIAL</strong> (o SERIE), MARCA, MODELO, UBICACION y ESTADO.</p>
-        
         <form id="excelForm" enctype="multipart/form-data">
             <div class="form-group">
-                <label for="archivo_excel">Seleccionar archivo Excel</label>
                 <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
             </div>
             <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Cargar Excel</button>
@@ -42,7 +43,7 @@
         <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
     </div>
 
-    <!-- SECCIÓN 2: REGISTRO Y VALIDACIÓN INDIVIDUAL -->
+    <!-- SECCIÓN 2: REGISTRO Y VALIDACIÓN INDIVIDUAL POR SERIAL -->
     <div class="card">
         <h2>🔍 Registro / Validación por Serial</h2>
         
@@ -59,16 +60,14 @@
                 <input type="text" id="nombre" placeholder="Ej: Monitor de Signos Vitales" required>
             </div>
 
-            <div class="form-group">
-                <div style="display: flex; gap: 10px;">
-                    <div style="flex: 1;">
-                        <label for="marca">Marca</label>
-                        <input type="text" id="marca" placeholder="Ej: Mindray">
-                    </div>
-                    <div style="flex: 1;">
-                        <label for="modelo">Modelo</label>
-                        <input type="text" id="modelo" placeholder="Ej: uMEC10">
-                    </div>
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                    <label for="marca">Marca</label>
+                    <input type="text" id="marca" placeholder="Ej: Mindray">
+                </div>
+                <div style="flex: 1;">
+                    <label for="modelo">Modelo</label>
+                    <input type="text" id="modelo" placeholder="Ej: uMEC10">
                 </div>
             </div>
 
@@ -90,14 +89,44 @@
         </form>
     </div>
 
+    <!-- SECCIÓN 3: CONSULTA Y DESCARGA DE LA BASE DE DATOS -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0;">📊 Base de Datos General</h3>
+            <a href="/descargar-excel" class="btn-descargar">📥 Descargar Base Completa en Excel</a>
+        </div>
+
+        <div class="form-group">
+            <input type="text" id="inputBuscar" placeholder="🔍 Buscar por nombre, serial, marca o ubicación..." onkeyup="buscarEquipos()">
+        </div>
+
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Serial</th>
+                        <th>Nombre</th>
+                        <th>Marca</th>
+                        <th>Modelo</th>
+                        <th>Ubicación</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaEquipos">
+                    <tr><td colspan="6">Cargando registros...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
 
 <script>
-    // 1. Lógica de verificación instantánea de Serial
     const serialInput = document.getElementById('serial');
     const alertBox = document.getElementById('alertBox');
     const btnGuardar = document.getElementById('btnGuardar');
 
+    // Validación instantánea de serial
     serialInput.addEventListener('input', async () => {
         const serial = serialInput.value.trim();
         if (serial.length < 2) {
@@ -112,7 +141,7 @@
         if (data.existe) {
             alertBox.className = 'alert alert-danger';
             alertBox.innerHTML = `⚠️ <strong>¡EQUIPO REPETIDO!</strong><br>
-                Este serial ya existe como: <strong>${data.equipo.nombre}</strong> (${data.equipo.marca} ${data.equipo.modelo}) en <em>${data.equipo.ubicacion}</em>.`;
+                El serial ya existe como: <strong>${data.equipo.nombre}</strong> (${data.equipo.marca} ${data.equipo.modelo}) en <em>${data.equipo.ubicacion}</em>.`;
             alertBox.style.display = 'block';
             btnGuardar.disabled = true;
         } else {
@@ -123,10 +152,9 @@
         }
     });
 
-    // 2. Guardar equipo individual
+    // Guardar equipo individual
     document.getElementById('equipoForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const payload = {
             serial: document.getElementById('serial').value,
             nombre: document.getElementById('nombre').value,
@@ -147,12 +175,13 @@
             alert('✅ Equipo guardado con éxito');
             document.getElementById('equipoForm').reset();
             alertBox.style.display = 'none';
+            cargarEquipos();
         } else {
             alert('❌ Error: ' + result.message);
         }
     });
 
-    // 3. Subir y procesar archivo Excel
+    // Cargar masiva desde Excel
     document.getElementById('excelForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('archivo_excel');
@@ -180,6 +209,7 @@
                 resultadoDiv.className = 'alert alert-success';
                 resultadoDiv.innerText = data.message;
                 document.getElementById('excelForm').reset();
+                cargarEquipos();
             } else {
                 resultadoDiv.className = 'alert alert-danger';
                 resultadoDiv.innerText = 'Error: ' + data.message;
@@ -192,6 +222,41 @@
             btnSubir.innerText = 'Procesar y Cargar Excel';
         }
     });
+
+    // Cargar y filtrar equipos en la tabla
+    async function cargarEquipos(query = '') {
+        const res = await fetch(`/listar-equipos?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        const tbody = document.getElementById('tablaEquipos');
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">No se encontraron equipos.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(eq => `
+            <tr>
+                <td><strong>${eq.serial}</strong></td>
+                <td>${eq.nombre}</td>
+                <td>${eq.marca}</td>
+                <td>${eq.modelo}</td>
+                <td>${eq.ubicacion}</td>
+                <td><span style="color: ${eq.estado === 'Operativo' ? '#059669' : '#dc2626'}; font-weight: bold;">${eq.estado}</span></td>
+            </tr>
+        `).join('');
+    }
+
+    let timeoutBuscar;
+    function buscarEquipos() {
+        clearTimeout(timeoutBuscar);
+        timeoutBuscar = setTimeout(() => {
+            const query = document.getElementById('inputBuscar').value;
+            cargarEquipos(query);
+        }, 300);
+    }
+
+    // Carga inicial
+    cargarEquipos();
 </script>
 
 </body>
