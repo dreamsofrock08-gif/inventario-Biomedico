@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario de Equipos Médicos</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f9; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2, h3 { color: #1e3a8a; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; display: none; }
+        .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+        .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #4ade80; }
+        .alert-info { background-color: #e0f2fe; color: #075985; border: 1px solid #38bdf8; }
+        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
+        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .btn-excel { background-color: #059669; }
+        .btn-excel:hover { background-color: #047857; }
+        hr { border: 0; height: 1px; background: #e5e7eb; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- SECCIÓN 1: CARGA MASIVA DESDE EXCEL -->
+    <div class="card">
+        <h3>📁 Cargar Base de Datos desde Excel</h3>
+        <p style="font-size: 14px; color: #4b5563;">Sube tu archivo `.xlsx` o `.xls`. El sistema leerá las columnas <strong>NOMBRE</strong>, <strong>SERIAL</strong> (o SERIE), MARCA, MODELO, UBICACION y ESTADO.</p>
+        
+        <form id="excelForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="archivo_excel">Seleccionar archivo Excel</label>
+                <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
+            </div>
+            <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Cargar Excel</button>
+        </form>
+        <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
+    </div>
+
+    <!-- SECCIÓN 2: REGISTRO Y VALIDACIÓN INDIVIDUAL -->
+    <div class="card">
+        <h2>🔍 Registro / Validación por Serial</h2>
+        
+        <div id="alertBox" class="alert"></div>
+
+        <form id="equipoForm">
+            <div class="form-group">
+                <label for="serial">Número de Serial / Serie *</label>
+                <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="nombre">Nombre del Equipo *</label>
+                <input type="text" id="nombre" placeholder="Ej: Monitor de Signos Vitales" required>
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label for="marca">Marca</label>
+                        <input type="text" id="marca" placeholder="Ej: Mindray">
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="modelo">Modelo</label>
+                        <input type="text" id="modelo" placeholder="Ej: uMEC10">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="ubicacion">Ubicación / Servicio</label>
+                <input type="text" id="ubicacion" placeholder="Ej: UCI Adultos - Cama 04">
+            </div>
+
+            <div class="form-group">
+                <label for="estado">Estado</label>
+                <select id="estado">
+                    <option value="Operativo">Operativo</option>
+                    <option value="En Mantenimiento">En Mantenimiento</option>
+                    <option value="Fuera de Servicio">Fuera de Servicio</option>
+                </select>
+            </div>
+
+            <button type="submit" id="btnGuardar">Guardar Equipo Individual</button>
+        </form>
+    </div>
+
+</div>
+
+<script>
+    // 1. Lógica de verificación instantánea de Serial
+    const serialInput = document.getElementById('serial');
+    const alertBox = document.getElementById('alertBox');
+    const btnGuardar = document.getElementById('btnGuardar');
+
+    serialInput.addEventListener('input', async () => {
+        const serial = serialInput.value.trim();
+        if (serial.length < 2) {
+            alertBox.style.display = 'none';
+            btnGuardar.disabled = false;
+            return;
+        }
+
+        const response = await fetch(`/verificar-serial/${encodeURIComponent(serial)}`);
+        const data = await response.json();
+
+        if (data.existe) {
+            alertBox.className = 'alert alert-danger';
+            alertBox.innerHTML = `⚠️ <strong>¡EQUIPO REPETIDO!</strong><br>
+                Este serial ya existe como: <strong>${data.equipo.nombre}</strong> (${data.equipo.marca} ${data.equipo.modelo}) en <em>${data.equipo.ubicacion}</em>.`;
+            alertBox.style.display = 'block';
+            btnGuardar.disabled = true;
+        } else {
+            alertBox.className = 'alert alert-success';
+            alertBox.innerHTML = ' Display / Serial disponible para registrar.';
+            alertBox.style.display = 'block';
+            btnGuardar.disabled = false;
+        }
+    });
+
+    // 2. Guardar equipo individual
+    document.getElementById('equipoForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const payload = {
+            serial: document.getElementById('serial').value,
+            nombre: document.getElementById('nombre').value,
+            marca: document.getElementById('marca').value,
+            modelo: document.getElementById('modelo').value,
+            ubicacion: document.getElementById('ubicacion').value,
+            estado: document.getElementById('estado').value
+        };
+
+        const res = await fetch('/agregar-equipo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+            alert('✅ Equipo guardado con éxito');
+            document.getElementById('equipoForm').reset();
+            alertBox.style.display = 'none';
+        } else {
+            alert('❌ Error: ' + result.message);
+        }
+    });
+
+    // 3. Subir y procesar archivo Excel
+    document.getElementById('excelForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('archivo_excel');
+        const resultadoDiv = document.getElementById('resultadoExcel');
+        const btnSubir = document.getElementById('btnSubirExcel');
+
+        if (!fileInput.files[0]) return;
+
+        const formData = new FormData();
+        formData.append('archivo_excel', fileInput.files[0]);
+
+        btnSubir.disabled = true;
+        btnSubir.innerText = 'Procesando Excel...';
+        resultadoDiv.style.display = 'block';
+        resultadoDiv.innerText = 'Cargando datos en la base de datos...';
+
+        try {
+            const res = await fetch('/cargar-excel', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                resultadoDiv.className = 'alert alert-success';
+                resultadoDiv.innerText = data.message;
+                document.getElementById('excelForm').reset();
+            } else {
+                resultadoDiv.className = 'alert alert-danger';
+                resultadoDiv.innerText = 'Error: ' + data.message;
+            }
+        } catch (err) {
+            resultadoDiv.className = 'alert alert-danger';
+            resultadoDiv.innerText = 'Error de conexión al subir el archivo.';
+        } finally {
+            btnSubir.disabled = false;
+            btnSubir.innerText = 'Procesar y Cargar Excel';
+        }
+    });
+</script>
+
+</body>
+</html>
