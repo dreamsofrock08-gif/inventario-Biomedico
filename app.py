@@ -9,7 +9,6 @@ CORS(app)
 DB_NAME = "inventario.db"
 
 def init_db():
-    """Crea la tabla de inventario si no existe."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
@@ -34,7 +33,6 @@ def index():
 
 @app.route('/verificar-serial/<serial>', methods=['GET'])
 def verificar_serial(serial):
-    """Endpoint para comprobar en tiempo real si un serial existe."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT id, nombre, marca, modelo, ubicacion FROM equipos WHERE UPPER(serial) = UPPER(?)", (serial.strip(),))
@@ -55,7 +53,6 @@ def verificar_serial(serial):
 
 @app.route('/agregar-equipo', methods=['POST'])
 def agregar_equipo():
-    """Registra un único equipo individual desde el formulario."""
     data = request.json
     serial = data.get('serial', '').strip()
     nombre = data.get('nombre', '').strip()
@@ -82,7 +79,6 @@ def agregar_equipo():
 
 @app.route('/cargar-excel', methods=['POST'])
 def cargar_excel():
-    """Recibe un archivo Excel desde la web y alimenta la base de datos."""
     if 'archivo_excel' not in request.files:
         return jsonify({"status": "error", "message": "No se adjuntó ningún archivo"}), 400
     
@@ -91,31 +87,45 @@ def cargar_excel():
         return jsonify({"status": "error", "message": "Nombre de archivo inválido"}), 400
 
     try:
-        # Leer el contenido del archivo subido sin guardarlo en disco
         file_bytes = io.BytesIO(file.read())
-        df = pd.read_excel(file_bytes)
+        
+        # Leer las primeras 15 filas sin encabezado para buscar la fila de nombres de columna real
+        df_raw = pd.read_excel(file_bytes, header=None)
+        
+        header_row_index = None
+        for idx in range(min(15, len(df_raw))):
+            row_values = [str(val).strip().upper() for val in df_raw.iloc[idx].values if pd.notna(val)]
+            if any('SERIE' in v or 'SERIAL' in v for v in row_values) and any('NOMBRE' in v or 'EQUIPO' in v for v in row_values):
+                header_row_index = idx
+                break
 
-        # Normalizar nombres de columnas eliminando espacios e ignorando mayúsculas
+        if header_row_index is None:
+            header_row_index = 0  # Caer de respaldo en la fila 0 si no se detecta la fila
+
+        # Volver al inicio del stream para re-leer con el encabezado correcto
+        file_bytes.seek(0)
+        df = pd.read_excel(file_bytes, header=header_row_index)
+
+        # Normalizar nombres de columnas a mayúsculas
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # Validar columnas mínimas requeridas
-        columnas_posibles_serial = ['SERIAL', 'SERIE', 'NUMERO_SERIAL', 'S/N']
+        # Mapear variaciones comunes de encabezados en el formato PMP
+        columnas_posibles_serial = ['SERIE', 'SERIAL', 'NO. INVENTARIO', 'S/N', 'NUMERO_SERIAL']
         col_serial = next((col for col in columnas_posibles_serial if col in df.columns), None)
 
-        columnas_posibles_nombre = ['NOMBRE', 'EQUIPO', 'NOMBRE_EQUIPO', 'DESCRIPCION']
+        columnas_posibles_nombre = ['NOMBRE DEL EQUIPO', 'NOMBRE', 'EQUIPO', 'DESCRIPCION']
         col_nombre = next((col for col in columnas_posibles_nombre if col in df.columns), None)
 
         if not col_serial or not col_nombre:
             return jsonify({
                 "status": "error", 
-                "message": "El Excel debe tener al menos las columnas 'NOMBRE' y 'SERIAL' (o SERIE)."
+                "message": "No se encontraron las columnas 'Nombre del equipo' y 'Serie' en el archivo."
             }), 400
 
-        # Obtener columnas opcionales
         col_marca = next((col for col in ['MARCA'] if col in df.columns), None)
         col_modelo = next((col for col in ['MODELO'] if col in df.columns), None)
-        col_ubicacion = next((col for col in ['UBICACION', 'SERVICIO', 'AREA'] if col in df.columns), None)
-        col_estado = next((col for col in ['ESTADO'] if col in df.columns), None)
+        col_ubicacion = next((col for col in ['UBICACIÓN ESPECIFICA', 'UBICACION ESPECIFICA', 'UBICACION', 'SEDE'] if col in df.columns), None)
+        col_estado = next((col for col in ['ESTADO', 'TIPO DE INTERVENCIÓN', 'TIPO DE INTERVENCION'] if col in df.columns), None)
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -127,7 +137,7 @@ def cargar_excel():
             serial = str(row[col_serial]).strip() if pd.notna(row[col_serial]) else ""
             nombre = str(row[col_nombre]).strip() if pd.notna(row[col_nombre]) else ""
 
-            if not serial or not nombre or serial.upper() in ['NAN', 'NONE']:
+            if not serial or not nombre or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE']:
                 continue
 
             marca = str(row[col_marca]).strip() if col_marca and pd.notna(row[col_marca]) else ""
@@ -142,7 +152,6 @@ def cargar_excel():
                 ''', (nombre, marca, modelo, serial, ubicacion, estado))
                 agregados += 1
             except sqlite3.IntegrityError:
-                # El serial ya existe, se omite para no duplicar
                 omitidos_duplicados += 1
 
         conn.commit()
@@ -150,11 +159,11 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f"Proceso finalizado. Registrados: {agregados} equipos nuevos. Omitidos por serial duplicado: {omitidos_duplicados}."
+            "message": f" Carga completada. Equipos nuevos registrados: {agregados}. Equipos omitidos (serial duplicado): {omitidos_duplicados}."
         })
 
     except Exception as e:
-        return jsonify({"status": "error", "message": f"Error al procesar el Excel: {str(e)}"}), 500
+        return jsonify({"status": "error", "message": f"Error procesando Excel: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
