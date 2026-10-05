@@ -24,7 +24,6 @@ def init_db():
             estado TEXT
         )
     ''')
-    # Garantizar que las nuevas columnas existan si la tabla previa no las tenía
     for col in ["numero_inventario", "sede"]:
         try:
             cursor.execute(f"ALTER TABLE equipos ADD COLUMN {col} TEXT")
@@ -41,7 +40,6 @@ def index():
 
 @app.route('/obtener-sedes', methods=['GET'])
 def obtener_sedes():
-    """Retorna la lista de sedes únicas almacenadas en la base de datos."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT DISTINCT sede FROM equipos WHERE sede IS NOT NULL AND TRIM(sede) != '' ORDER BY sede ASC")
@@ -53,7 +51,7 @@ def obtener_sedes():
 def verificar_serial(serial):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre, marca, modelo, numero_inventario, sede, ubicacion FROM equipos WHERE UPPER(serial) = UPPER(?)", (serial.strip(),))
+    cursor.execute("SELECT id, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado FROM equipos WHERE UPPER(serial) = UPPER(?)", (serial.strip(),))
     equipo = cursor.fetchone()
     conn.close()
 
@@ -61,12 +59,14 @@ def verificar_serial(serial):
         return jsonify({
             "existe": True,
             "equipo": {
+                "id": equipo[0],
                 "nombre": equipo[1],
                 "marca": equipo[2],
                 "modelo": equipo[3],
-                "numero_inventario": equipo[4] if equipo[4] else "N/A",
-                "sede": equipo[5] if equipo[5] else "Sin Sede",
-                "ubicacion": equipo[6]
+                "numero_inventario": equipo[4] if equipo[4] else "",
+                "sede": equipo[5] if equipo[5] else "",
+                "ubicacion": equipo[6] if equipo[6] else "",
+                "estado": equipo[7] if equipo[7] else "Operativo"
             }
         })
     return jsonify({"existe": False})
@@ -98,6 +98,35 @@ def agregar_equipo():
         return jsonify({"status": "success", "message": "Equipo registrado correctamente"})
     except sqlite3.IntegrityError:
         return jsonify({"status": "error", "message": "El serial ya existe en la base de datos"}), 400
+
+@app.route('/actualizar-equipo', methods=['POST'])
+def actualizar_equipo():
+    data = request.json
+    serial = data.get('serial', '').strip()
+    nombre = data.get('nombre', '').strip()
+    marca = data.get('marca', '').strip()
+    modelo = data.get('modelo', '').strip()
+    numero_inventario = data.get('numero_inventario', '').strip()
+    sede = data.get('sede', '').strip()
+    ubicacion = data.get('ubicacion', '').strip()
+    estado = data.get('estado', 'Operativo').strip()
+
+    if not serial or not nombre:
+        return jsonify({"status": "error", "message": "Nombre y Serial son obligatorios"}), 400
+
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE equipos 
+            SET nombre = ?, marca = ?, modelo = ?, numero_inventario = ?, sede = ?, ubicacion = ?, estado = ?
+            WHERE UPPER(serial) = UPPER(?)
+        ''', (nombre, marca, modelo, numero_inventario, sede, ubicacion, estado, serial))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "message": "Datos del equipo actualizados correctamente"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error al actualizar: {str(e)}"}), 500
 
 @app.route('/cargar-excel', methods=['POST'])
 def cargar_excel():
