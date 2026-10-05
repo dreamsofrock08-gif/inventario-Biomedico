@@ -13,10 +13,13 @@
         label { display: block; font-weight: bold; margin-bottom: 5px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; display: none; }
+        .alert-warning { background-color: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
         .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
         .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #4ade80; }
         .alert-info { background-color: #e0f2fe; color: #075985; border: 1px solid #38bdf8; }
-        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
+        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: background-color 0.2s; }
+        button.btn-update { background-color: #d97706; }
+        button.btn-update:hover { background-color: #b45309; }
         button:disabled { background-color: #9ca3af; cursor: not-allowed; }
         .btn-excel { background-color: #059669; }
         .btn-excel:hover { background-color: #047857; }
@@ -50,9 +53,9 @@
         <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
     </div>
 
-    <!-- SECCIÓN 2: REGISTRO Y VALIDACIÓN INDIVIDUAL POR SERIAL -->
+    <!-- SECCIÓN 2: REGISTRO / EDICIÓN Y VALIDACIÓN INDIVIDUAL POR SERIAL -->
     <div class="card">
-        <h2>🔍 Registro / Validación por Serial</h2>
+        <h2 id="tituloFormulario">🔍 Registro / Edición por Serial</h2>
         
         <div id="alertBox" class="alert"></div>
 
@@ -108,7 +111,7 @@
                 </select>
             </div>
 
-            <button type="submit" id="btnGuardar">Guardar Equipo Individual</button>
+            <button type="submit" id="btnGuardar">💾 Guardar Equipo Nuevo</button>
         </form>
     </div>
 
@@ -156,6 +159,7 @@
     const serialInput = document.getElementById('serial');
     const alertBox = document.getElementById('alertBox');
     const btnGuardar = document.getElementById('btnGuardar');
+    let esModoEdicion = false;
 
     async function cargarListaSedes() {
         const res = await fetch('/obtener-sedes');
@@ -164,13 +168,11 @@
         const selectSedeForm = document.getElementById('selectSede');
         const selectSedeFiltro = document.getElementById('filtroSedeTabla');
 
-        // Resetear select del formulario
         selectSedeForm.innerHTML = '<option value="">-- Seleccionar Sede --</option><option value="__NUEVA__">+ Agregar nueva sede...</option>';
         sedes.forEach(s => {
             selectSedeForm.innerHTML += `<option value="${s}">${s}</option>`;
         });
 
-        // Resetear select de filtro de tabla
         const sedeActualFiltro = selectSedeFiltro.value;
         selectSedeFiltro.innerHTML = '<option value="">Todas las Sedes</option>';
         sedes.forEach(s => {
@@ -190,12 +192,12 @@
         }
     }
 
-    // Validación instantánea de serial
+    // Validación instantánea de serial y autocompletado
     serialInput.addEventListener('input', async () => {
         const serial = serialInput.value.trim();
         if (serial.length < 2) {
             alertBox.style.display = 'none';
-            btnGuardar.disabled = false;
+            resetearModoFormulario();
             return;
         }
 
@@ -203,20 +205,55 @@
         const data = await response.json();
 
         if (data.existe) {
-            alertBox.className = 'alert alert-danger';
-            alertBox.innerHTML = `⚠️ <strong>¡EQUIPO REPETIDO!</strong><br>
-                El serial ya existe como: <strong>${data.equipo.nombre}</strong> (Inv: ${data.equipo.numero_inventario}) - ${data.equipo.marca} ${data.equipo.modelo} en <em>${data.equipo.sede} - ${data.equipo.ubicacion}</em>.`;
+            esModoEdicion = true;
+            const eq = data.equipo;
+
+            // Autocompletar campos
+            document.getElementById('nombre').value = eq.nombre || '';
+            document.getElementById('numero_inventario').value = eq.numero_inventario || '';
+            document.getElementById('marca').value = eq.marca || '';
+            document.getElementById('modelo').value = eq.modelo || '';
+            document.getElementById('ubicacion').value = eq.ubicacion || '';
+            document.getElementById('estado').value = eq.estado || 'Operativo';
+
+            // Ajustar el selector de Sede
+            const selectSede = document.getElementById('selectSede');
+            if (eq.sede && [...selectSede.options].some(o => o.value === eq.sede)) {
+                selectSede.value = eq.sede;
+                toggleNuevaSede(eq.sede);
+            } else if (eq.sede) {
+                selectSede.value = '__NUEVA__';
+                toggleNuevaSede('__NUEVA__');
+                document.getElementById('inputNuevaSede').value = eq.sede;
+            }
+
+            // Cambiar la alerta y el botón a modo actualización
+            alertBox.className = 'alert alert-warning';
+            alertBox.innerHTML = `⚠️ <strong>EQUIPO ENCONTRADO EN BASE DE DATOS</strong><br>
+                Puedes modificar los campos (Ubicación, Estado, Sede, etc.) y presionar <strong>"Actualizar Datos del Equipo"</strong> para guardar los cambios.`;
             alertBox.style.display = 'block';
-            btnGuardar.disabled = true;
+
+            btnGuardar.innerText = '✏️ Actualizar Datos del Equipo';
+            btnGuardar.className = 'btn-update';
         } else {
+            esModoEdicion = false;
+            
             alertBox.className = 'alert alert-success';
-            alertBox.innerHTML = ' Display / Serial disponible para registrar.';
+            alertBox.innerHTML = ' Display / Serial no registrado. Puedes ingresar los datos como un equipo nuevo.';
             alertBox.style.display = 'block';
-            btnGuardar.disabled = false;
+
+            btnGuardar.innerText = '💾 Guardar Equipo Nuevo';
+            btnGuardar.className = '';
         }
     });
 
-    // Guardar equipo individual
+    function resetearModoFormulario() {
+        esModoEdicion = false;
+        btnGuardar.innerText = '💾 Guardar Equipo Nuevo';
+        btnGuardar.className = '';
+    }
+
+    // Guardar o Actualizar equipo
     document.getElementById('equipoForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -236,7 +273,9 @@
             estado: document.getElementById('estado').value
         };
 
-        const res = await fetch('/agregar-equipo', {
+        const endpoint = esModoEdicion ? '/actualizar-equipo' : '/agregar-equipo';
+
+        const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -244,10 +283,11 @@
 
         const result = await res.json();
         if (res.ok) {
-            alert('✅ Equipo guardado con éxito');
+            alert(esModoEdicion ? '✅ Equipo actualizado con éxito' : '✅ Equipo guardado con éxito');
             document.getElementById('equipoForm').reset();
             toggleNuevaSede('');
             alertBox.style.display = 'none';
+            resetearModoFormulario();
             await cargarListaSedes();
             cargarEquipos();
         } else {
@@ -356,7 +396,6 @@
         }, 300);
     }
 
-    // Inicialización
     cargarListaSedes().then(() => cargarEquipos());
 </script>
 
