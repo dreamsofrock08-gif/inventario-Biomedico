@@ -19,15 +19,17 @@ def init_db():
             modelo TEXT,
             serial TEXT UNIQUE NOT NULL,
             numero_inventario TEXT,
+            sede TEXT,
             ubicacion TEXT,
             estado TEXT
         )
     ''')
-    # Garantizar que la columna exista si la tabla ya había sido creada previamente
-    try:
-        cursor.execute("ALTER TABLE equipos ADD COLUMN numero_inventario TEXT")
-    except sqlite3.OperationalError:
-        pass  # Ya existe la columna
+    # Garantizar que las nuevas columnas existan si la tabla previa no las tenía
+    for col in ["numero_inventario", "sede"]:
+        try:
+            cursor.execute(f"ALTER TABLE equipos ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
 
@@ -37,11 +39,21 @@ init_db()
 def index():
     return render_template('index.html')
 
+@app.route('/obtener-sedes', methods=['GET'])
+def obtener_sedes():
+    """Retorna la lista de sedes únicas almacenadas en la base de datos."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT sede FROM equipos WHERE sede IS NOT NULL AND TRIM(sede) != '' ORDER BY sede ASC")
+    sedes = [f[0] for f in cursor.fetchall()]
+    conn.close()
+    return jsonify(sedes)
+
 @app.route('/verificar-serial/<serial>', methods=['GET'])
 def verificar_serial(serial):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre, marca, modelo, numero_inventario, ubicacion FROM equipos WHERE UPPER(serial) = UPPER(?)", (serial.strip(),))
+    cursor.execute("SELECT id, nombre, marca, modelo, numero_inventario, sede, ubicacion FROM equipos WHERE UPPER(serial) = UPPER(?)", (serial.strip(),))
     equipo = cursor.fetchone()
     conn.close()
 
@@ -53,7 +65,8 @@ def verificar_serial(serial):
                 "marca": equipo[2],
                 "modelo": equipo[3],
                 "numero_inventario": equipo[4] if equipo[4] else "N/A",
-                "ubicacion": equipo[5]
+                "sede": equipo[5] if equipo[5] else "Sin Sede",
+                "ubicacion": equipo[6]
             }
         })
     return jsonify({"existe": False})
@@ -66,6 +79,7 @@ def agregar_equipo():
     marca = data.get('marca', '').strip()
     modelo = data.get('modelo', '').strip()
     numero_inventario = data.get('numero_inventario', '').strip()
+    sede = data.get('sede', '').strip()
     ubicacion = data.get('ubicacion', '').strip()
     estado = data.get('estado', 'Operativo').strip()
 
@@ -76,9 +90,9 @@ def agregar_equipo():
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, ubicacion, estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (nombre, marca, modelo, serial, numero_inventario, ubicacion, estado))
+            INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado))
         conn.commit()
         conn.close()
         return jsonify({"status": "success", "message": "Equipo registrado correctamente"})
@@ -121,7 +135,8 @@ def cargar_excel():
         col_marca = next((col for col in ['MARCA'] if col in df.columns), None)
         col_modelo = next((col for col in ['MODELO'] if col in df.columns), None)
         col_inv = next((col for col in ['NO. INVENTARIO', 'NO INVENTARIO', 'INVENTARIO', 'ACTIVO FIJO', 'NUMERO DE SAP', 'CODIGO'] if col in df.columns), None)
-        col_ubicacion = next((col for col in ['UBICACIÓN ESPECIFICA', 'UBICACION ESPECIFICA', 'UBICACION', 'SEDE'] if col in df.columns), None)
+        col_sede = next((col for col in ['SEDE', 'UNIDAD DE NEGOCIO', 'CENTRO DE COSTO'] if col in df.columns), None)
+        col_ubicacion = next((col for col in ['UBICACIÓN ESPECIFICA', 'UBICACION ESPECIFICA', 'UBICACION'] if col in df.columns), None)
         col_estado = next((col for col in ['ESTADO', 'TIPO DE INTERVENCIÓN', 'TIPO DE INTERVENCION'] if col in df.columns), None)
 
         conn = sqlite3.connect(DB_NAME)
@@ -140,14 +155,15 @@ def cargar_excel():
             marca = str(row[col_marca]).strip() if col_marca and pd.notna(row[col_marca]) else ""
             modelo = str(row[col_modelo]).strip() if col_modelo and pd.notna(row[col_modelo]) else ""
             num_inv = str(row[col_inv]).strip() if col_inv and pd.notna(row[col_inv]) else ""
+            sede = str(row[col_sede]).strip() if col_sede and pd.notna(row[col_sede]) else ""
             ubicacion = str(row[col_ubicacion]).strip() if col_ubicacion and pd.notna(row[col_ubicacion]) else ""
             estado = str(row[col_estado]).strip() if col_estado and pd.notna(row[col_estado]) else "Operativo"
 
             try:
                 cursor.execute('''
-                    INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, ubicacion, estado)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (nombre, marca, modelo, serial, num_inv, ubicacion, estado))
+                    INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, estado))
                 agregados += 1
             except sqlite3.IntegrityError:
                 omitidos_duplicados += 1
@@ -178,44 +194,58 @@ def limpiar_bd():
 @app.route('/listar-equipos', methods=['GET'])
 def listar_equipos():
     query = request.args.get('q', '').strip()
+    filter_sede = request.args.get('sede', '').strip()
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
+    sql = 'SELECT id, nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado FROM equipos WHERE 1=1'
+    params = []
+
+    if filter_sede:
+        sql += ' AND UPPER(sede) = UPPER(?)'
+        params.append(filter_sede)
+
     if query:
         search_pattern = f"%{query}%"
-        cursor.execute('''
-            SELECT id, nombre, marca, modelo, serial, numero_inventario, ubicacion, estado 
-            FROM equipos 
-            WHERE nombre LIKE ? OR serial LIKE ? OR numero_inventario LIKE ? OR marca LIKE ? OR ubicacion LIKE ?
-            ORDER BY id DESC LIMIT 100
-        ''', (search_pattern, search_pattern, search_pattern, search_pattern, search_pattern))
-    else:
-        cursor.execute('SELECT id, nombre, marca, modelo, serial, numero_inventario, ubicacion, estado FROM equipos ORDER BY id DESC LIMIT 100')
+        sql += ' AND (nombre LIKE ? OR serial LIKE ? OR numero_inventario LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)'
+        params.extend([search_pattern, search_pattern, search_pattern, search_pattern, search_pattern])
 
+    sql += ' ORDER BY id DESC LIMIT 200'
+
+    cursor.execute(sql, params)
     filas = cursor.fetchall()
     conn.close()
 
     equipos = [{
         "id": f[0], "nombre": f[1], "marca": f[2], "modelo": f[3],
-        "serial": f[4], "numero_inventario": f[5], "ubicacion": f[6], "estado": f[7]
+        "serial": f[4], "numero_inventario": f[5], "sede": f[6], "ubicacion": f[7], "estado": f[8]
     } for f in filas]
 
     return jsonify(equipos)
 
 @app.route('/descargar-excel', methods=['GET'])
 def descargar_excel():
+    filter_sede = request.args.get('sede', '').strip()
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query('''
-        SELECT id AS ID, 
-               nombre AS NOMBRE, 
-               marca AS MARCA, 
-               modelo AS MODELO, 
-               serial AS SERIAL, 
-               numero_inventario AS "NO. INVENTARIO", 
-               ubicacion AS UBICACION, 
-               estado AS ESTADO 
-        FROM equipos
-    ''', conn)
+    
+    if filter_sede:
+        query = '''
+            SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, 
+                   serial AS SERIAL, numero_inventario AS "NO. INVENTARIO", 
+                   sede AS SEDE, ubicacion AS UBICACION, estado AS ESTADO 
+            FROM equipos WHERE UPPER(sede) = UPPER(?)
+        '''
+        df = pd.read_sql_query(query, conn, params=(filter_sede,))
+    else:
+        query = '''
+            SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, 
+                   serial AS SERIAL, numero_inventario AS "NO. INVENTARIO", 
+                   sede AS SEDE, ubicacion AS UBICACION, estado AS ESTADO 
+            FROM equipos
+        '''
+        df = pd.read_sql_query(query, conn)
+        
     conn.close()
 
     output = io.BytesIO()
@@ -223,11 +253,12 @@ def descargar_excel():
         df.to_excel(writer, index=False, sheet_name='Inventario_General')
     
     output.seek(0)
+    filename = f"Inventario_{filter_sede.replace(' ', '_')}.xlsx" if filter_sede else "Inventario_Biomedico_Actualizado.xlsx"
     return send_file(
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name='Inventario_Biomedico_Actualizado.xlsx'
+        download_name=filename
     )
 
 if __name__ == '__main__':
