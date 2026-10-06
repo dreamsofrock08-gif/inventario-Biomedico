@@ -66,8 +66,8 @@
                     <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
                 </div>
                 <div style="flex: 1;">
-                    <label for="numero_inventario">No. Inventario / Activo Fijo</label>
-                    <input type="text" id="numero_inventario" placeholder="Ej: 153200031083">
+                    <label for="numero_inventario">No. Inventario / Activo Fijo *</label>
+                    <input type="text" id="numero_inventario" placeholder="Ej: 153200031083" required>
                 </div>
             </div>
 
@@ -78,33 +78,33 @@
 
             <div class="form-group" style="display: flex; gap: 10px;">
                 <div style="flex: 1;">
-                    <label for="marca">Marca</label>
-                    <input type="text" id="marca" placeholder="Ej: Mindray">
+                    <label for="marca">Marca *</label>
+                    <input type="text" id="marca" placeholder="Ej: Mindray" required>
                 </div>
                 <div style="flex: 1;">
-                    <label for="modelo">Modelo</label>
-                    <input type="text" id="modelo" placeholder="Ej: uMEC10">
+                    <label for="modelo">Modelo *</label>
+                    <input type="text" id="modelo" placeholder="Ej: uMEC10" required>
                 </div>
             </div>
 
             <div class="form-group" style="display: flex; gap: 10px;">
                 <div style="flex: 1;">
-                    <label for="selectSede">Sede</label>
-                    <select id="selectSede" onchange="toggleNuevaSede(this.value)">
+                    <label for="selectSede">Sede *</label>
+                    <select id="selectSede" required onchange="toggleNuevaSede(this.value)">
                         <option value="">-- Seleccionar Sede --</option>
                         <option value="__NUEVA__">+ Agregar nueva sede...</option>
                     </select>
                     <input type="text" id="inputNuevaSede" placeholder="Escriba la nueva sede..." style="display: none; margin-top: 5px;">
                 </div>
                 <div style="flex: 1;">
-                    <label for="ubicacion">Ubicación Específica</label>
-                    <input type="text" id="ubicacion" placeholder="Ej: Torre A Piso 1 Micobacterias">
+                    <label for="ubicacion">Ubicación Específica *</label>
+                    <input type="text" id="ubicacion" placeholder="Ej: Torre A Piso 1 Micobacterias" required>
                 </div>
             </div>
 
             <div class="form-group">
-                <label for="estado">Estado</label>
-                <select id="estado">
+                <label for="estado">Estado *</label>
+                <select id="estado" required>
                     <option value="Operativo">Operativo</option>
                     <option value="En Mantenimiento">En Mantenimiento</option>
                     <option value="Fuera de Servicio">Fuera de Servicio</option>
@@ -189,6 +189,7 @@
         } else {
             inputNueva.style.display = 'none';
             inputNueva.required = false;
+            inputNueva.value = '';
         }
     }
 
@@ -227,10 +228,9 @@
                 document.getElementById('inputNuevaSede').value = eq.sede;
             }
 
-            // Cambiar la alerta y el botón a modo actualización
             alertBox.className = 'alert alert-warning';
             alertBox.innerHTML = `⚠️ <strong>EQUIPO ENCONTRADO EN BASE DE DATOS</strong><br>
-                Puedes modificar los campos (Ubicación, Estado, Sede, etc.) y presionar <strong>"Actualizar Datos del Equipo"</strong> para guardar los cambios.`;
+                Modifica los campos necesarios y presiona <strong>"Actualizar Datos del Equipo"</strong> para guardar los cambios.`;
             alertBox.style.display = 'block';
 
             btnGuardar.innerText = '✏️ Actualizar Datos del Equipo';
@@ -239,7 +239,7 @@
             esModoEdicion = false;
             
             alertBox.className = 'alert alert-success';
-            alertBox.innerHTML = ' Display / Serial no registrado. Puedes ingresar los datos como un equipo nuevo.';
+            alertBox.innerHTML = ' Display / Serial no registrado. Ingresa todos los datos requeridos para guardar.';
             alertBox.style.display = 'block';
 
             btnGuardar.innerText = '💾 Guardar Equipo Nuevo';
@@ -253,26 +253,30 @@
         btnGuardar.className = '';
     }
 
-    // Guardar o Actualizar equipo
+    // Guardar o Actualizar equipo con validación estricta
     document.getElementById('equipoForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        const serial = document.getElementById('serial').value.trim();
+        const numero_inventario = document.getElementById('numero_inventario').value.trim();
+        const nombre = document.getElementById('nombre').value.trim();
+        const marca = document.getElementById('marca').value.trim();
+        const modelo = document.getElementById('modelo').value.trim();
+        const ubicacion = document.getElementById('ubicacion').value.trim();
+        const estado = document.getElementById('estado').value.trim();
+
         let sedeSeleccionada = document.getElementById('selectSede').value;
         if (sedeSeleccionada === '__NUEVA__') {
             sedeSeleccionada = document.getElementById('inputNuevaSede').value.trim();
         }
 
-        const payload = {
-            serial: document.getElementById('serial').value,
-            numero_inventario: document.getElementById('numero_inventario').value,
-            nombre: document.getElementById('nombre').value,
-            marca: document.getElementById('marca').value,
-            modelo: document.getElementById('modelo').value,
-            sede: sedeSeleccionada,
-            ubicacion: document.getElementById('ubicacion').value,
-            estado: document.getElementById('estado').value
-        };
+        // Verificación adicional de campos obligatorios en cliente
+        if (!serial || !numero_inventario || !nombre || !marca || !modelo || !sedeSeleccionada || !ubicacion || !estado) {
+            alert('⚠️ Todos los campos son obligatorios. Por favor completa todos los campos antes de continuar.');
+            return;
+        }
 
+        const payload = { serial, numero_inventario, nombre, marca, modelo, sede: sedeSeleccionada, ubicacion, estado };
         const endpoint = esModoEdicion ? '/actualizar-equipo' : '/agregar-equipo';
 
         const res = await fetch(endpoint, {
