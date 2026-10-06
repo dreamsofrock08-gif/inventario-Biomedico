@@ -83,8 +83,8 @@ def agregar_equipo():
     ubicacion = data.get('ubicacion', '').strip()
     estado = data.get('estado', 'Operativo').strip()
 
-    if not serial or not nombre:
-        return jsonify({"status": "error", "message": "Nombre y Serial son obligatorios"}), 400
+    if not all([serial, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado]):
+        return jsonify({"status": "error", "message": "Todos los campos son obligatorios"}), 400
 
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -111,8 +111,8 @@ def actualizar_equipo():
     ubicacion = data.get('ubicacion', '').strip()
     estado = data.get('estado', 'Operativo').strip()
 
-    if not serial or not nombre:
-        return jsonify({"status": "error", "message": "Nombre y Serial son obligatorios"}), 400
+    if not all([serial, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado]):
+        return jsonify({"status": "error", "message": "Todos los campos son obligatorios"}), 400
 
     try:
         conn = sqlite3.connect(DB_NAME)
