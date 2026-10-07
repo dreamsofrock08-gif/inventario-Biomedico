@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventario de Equipos Médicos</title>
+    <title>Inventario y Control de Mantenimiento Biomédico</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
-        .container { max-width: 1050px; margin: 0 auto; }
+        .container { max-width: 1150px; margin: 0 auto; }
         .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h2, h3 { color: #1e3a8a; margin-top: 0; }
         .form-group { margin-bottom: 15px; }
@@ -26,29 +26,33 @@
         .btn-danger { background-color: #dc2626; width: auto; font-size: 14px; padding: 8px 15px; }
         .btn-danger:hover { background-color: #b91c1c; }
         .btn-descargar { background-color: #0284c7; width: auto; display: inline-block; padding: 10px 20px; text-decoration: none; color: white; border-radius: 4px; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-        th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
         th { background-color: #f3f4f6; color: #1f2937; }
         tr:nth-child(even) { background-color: #f9fafb; }
+        .badge { padding: 3px 8px; border-radius: 12px; font-weight: bold; font-size: 11px; display: inline-block; }
+        .badge-success { background-color: #dcfce7; color: #15803d; }
+        .badge-danger { background-color: #fee2e2; color: #b91c1c; }
+        .badge-warning { background-color: #fef3c7; color: #b45309; }
     </style>
 </head>
 <body>
 
 <div class="container">
 
-    <!-- SECCIÓN 1: CARGA MASIVA DESDE EXCEL -->
+    <!-- SECCIÓN 1: CARGA MASIVA DESDE EXCEL CON AUDITORÍA PMP -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
+            <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel (Cronograma PMP)</h3>
             <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
         </div>
-        <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube un archivo Excel para alimentar la base de datos.</p>
+        <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube el Excel del cronograma. El sistema auditará automáticamente la última ejecución, aplazamientos y estado de cumplimiento.</p>
         
         <form id="excelForm" enctype="multipart/form-data">
             <div class="form-group">
                 <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
             </div>
-            <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Cargar Excel</button>
+            <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Auditar Excel</button>
         </form>
         <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
     </div>
@@ -115,35 +119,46 @@
         </form>
     </div>
 
-    <!-- SECCIÓN 3: CONSULTA Y DESCARGA DE LA BASE DE DATOS -->
+    <!-- SECCIÓN 3: CONSULTA, FILTRO DE CUMPLIMIENTO Y DESCARGA -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h3 style="margin: 0;">📊 Base de Datos General</h3>
-            <a href="#" id="btnDescargarExcel" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Base en Excel</a>
+            <h3 style="margin: 0;">📊 Control de Inventario y Cumplimiento PMP</h3>
+            <a href="#" id="btnDescargarExcel" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Reporte en Excel</a>
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
             <div style="flex: 1;">
+                <label style="font-size: 12px;">Sede:</label>
                 <select id="filtroSedeTabla" onchange="buscarEquipos()">
                     <option value="">Todas las Sedes</option>
                 </select>
             </div>
+            <div style="flex: 1;">
+                <label style="font-size: 12px;">Estado Mantenimiento (PMP):</label>
+                <select id="filtroCumplimiento" onchange="buscarEquipos()">
+                    <option value="">Todos los Estados PMP</option>
+                    <option value="Al Día">🟢 Cumple / Al Día</option>
+                    <option value="En Mora">🔴 En Mora / Pendiente</option>
+                    <option value="Aplazado">🟡 Aplazado / Reprogramado</option>
+                </select>
+            </div>
             <div style="flex: 2;">
-                <input type="text" id="inputBuscar" placeholder="🔍 Buscar por serial, No. Inventario, nombre, marca o ubicación..." onkeyup="buscarEquipos()">
+                <label style="font-size: 12px;">Búsqueda por palabra clave:</label>
+                <input type="text" id="inputBuscar" placeholder="🔍 Buscar por serial, No. Inv, nombre..." onkeyup="buscarEquipos()">
             </div>
         </div>
 
-        <div style="max-height: 400px; overflow-y: auto;">
+        <div style="max-height: 450px; overflow-y: auto;">
             <table>
                 <thead>
                     <tr>
                         <th>Serial</th>
-                        <th>No. Inventario</th>
+                        <th>No. Inv</th>
                         <th>Nombre</th>
-                        <th>Marca / Modelo</th>
-                        <th>Sede</th>
-                        <th>Ubicación</th>
-                        <th>Estado</th>
+                        <th>Sede / Ubicación</th>
+                        <th>Último Mantenimiento (OK)</th>
+                        <th>¿Aplazado?</th>
+                        <th>Estado PMP</th>
                     </tr>
                 </thead>
                 <tbody id="tablaEquipos">
@@ -169,15 +184,11 @@
         const selectSedeFiltro = document.getElementById('filtroSedeTabla');
 
         selectSedeForm.innerHTML = '<option value="">-- Seleccionar Sede --</option><option value="__NUEVA__">+ Agregar nueva sede...</option>';
-        sedes.forEach(s => {
-            selectSedeForm.innerHTML += `<option value="${s}">${s}</option>`;
-        });
+        sedes.forEach(s => { selectSedeForm.innerHTML += `<option value="${s}">${s}</option>`; });
 
         const sedeActualFiltro = selectSedeFiltro.value;
         selectSedeFiltro.innerHTML = '<option value="">Todas las Sedes</option>';
-        sedes.forEach(s => {
-            selectSedeFiltro.innerHTML += `<option value="${s}">${s}</option>`;
-        });
+        sedes.forEach(s => { selectSedeFiltro.innerHTML += `<option value="${s}">${s}</option>`; });
         selectSedeFiltro.value = sedeActualFiltro;
     }
 
@@ -193,7 +204,7 @@
         }
     }
 
-    // Validación instantánea de serial y autocompletado
+    // Validación instantánea y autocompletado con datos de Mantenimiento
     serialInput.addEventListener('input', async () => {
         const serial = serialInput.value.trim();
         if (serial.length < 2) {
@@ -209,7 +220,6 @@
             esModoEdicion = true;
             const eq = data.equipo;
 
-            // Autocompletar campos
             document.getElementById('nombre').value = eq.nombre || '';
             document.getElementById('numero_inventario').value = eq.numero_inventario || '';
             document.getElementById('marca').value = eq.marca || '';
@@ -217,7 +227,6 @@
             document.getElementById('ubicacion').value = eq.ubicacion || '';
             document.getElementById('estado').value = eq.estado || 'Operativo';
 
-            // Ajustar el selector de Sede
             const selectSede = document.getElementById('selectSede');
             if (eq.sede && [...selectSede.options].some(o => o.value === eq.sede)) {
                 selectSede.value = eq.sede;
@@ -229,15 +238,15 @@
             }
 
             alertBox.className = 'alert alert-warning';
-            alertBox.innerHTML = `⚠️ <strong>EQUIPO ENCONTRADO EN BASE DE DATOS</strong><br>
-                Modifica los campos necesarios y presiona <strong>"Actualizar Datos del Equipo"</strong> para guardar los cambios.`;
+            alertBox.innerHTML = `⚠️ <strong>EQUIPO REGISTRADO EN SISTEMA</strong><br>
+                Último Mantenimiento OK: <strong>${eq.ultimo_mantenimiento}</strong> | Aplazamientos: <strong>${eq.aplazado}</strong> | Estado PMP: <strong>${eq.cumplimiento_pmp}</strong><br>
+                Modifica la ubicación o estado y presiona <strong>"Actualizar Datos del Equipo"</strong>.`;
             alertBox.style.display = 'block';
 
             btnGuardar.innerText = '✏️ Actualizar Datos del Equipo';
             btnGuardar.className = 'btn-update';
         } else {
             esModoEdicion = false;
-            
             alertBox.className = 'alert alert-success';
             alertBox.innerHTML = ' Display / Serial no registrado. Ingresa todos los datos requeridos para guardar.';
             alertBox.style.display = 'block';
@@ -253,7 +262,6 @@
         btnGuardar.className = '';
     }
 
-    // Guardar o Actualizar equipo con validación estricta
     document.getElementById('equipoForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -270,9 +278,8 @@
             sedeSeleccionada = document.getElementById('inputNuevaSede').value.trim();
         }
 
-        // Verificación adicional de campos obligatorios en cliente
         if (!serial || !numero_inventario || !nombre || !marca || !modelo || !sedeSeleccionada || !ubicacion || !estado) {
-            alert('⚠️ Todos los campos son obligatorios. Por favor completa todos los campos antes de continuar.');
+            alert('⚠️ Todos los campos son obligatorios.');
             return;
         }
 
@@ -299,7 +306,6 @@
         }
     });
 
-    // Cargar masiva desde Excel
     document.getElementById('excelForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('archivo_excel');
@@ -312,16 +318,12 @@
         formData.append('archivo_excel', fileInput.files[0]);
 
         btnSubir.disabled = true;
-        btnSubir.innerText = 'Procesando Excel...';
+        btnSubir.innerText = 'Auditando y Procesando Excel...';
         resultadoDiv.style.display = 'block';
-        resultadoDiv.innerText = 'Cargando datos en la base de datos...';
+        resultadoDiv.innerText = 'Procesando historial de mantenimiento preventivo...';
 
         try {
-            const res = await fetch('/cargar-excel', {
-                method: 'POST',
-                body: formData
-            });
-
+            const res = await fetch('/cargar-excel', { method: 'POST', body: formData });
             const data = await res.json();
             if (res.ok) {
                 resultadoDiv.className = 'alert alert-success';
@@ -335,22 +337,17 @@
             }
         } catch (err) {
             resultadoDiv.className = 'alert alert-danger';
-            resultadoDiv.innerText = 'Error de conexión al subir el archivo.';
+            resultadoDiv.innerText = 'Error de conexión al procesar el archivo.';
         } finally {
             btnSubir.disabled = false;
-            btnSubir.innerText = 'Procesar y Cargar Excel';
+            btnSubir.innerText = 'Procesar y Auditar Excel';
         }
     });
 
-    // Vaciar Base de Datos
     async function limpiarBaseDatos() {
-        if (!confirm("⚠️ ¿Estás seguro de vaciar toda la base de datos actual? Esta acción no se puede deshacer.")) {
-            return;
-        }
-
+        if (!confirm("⚠️ ¿Estás seguro de vaciar toda la base de datos actual? Esta acción no se puede deshacer.")) return;
         const res = await fetch('/limpiar-bd', { method: 'POST' });
         const data = await res.json();
-
         if (res.ok) {
             alert("🧹 " + data.message);
             await cargarListaSedes();
@@ -360,44 +357,49 @@
         }
     }
 
-    // Cargar y filtrar equipos en la tabla
     async function cargarEquipos() {
         const query = document.getElementById('inputBuscar').value;
         const sede = document.getElementById('filtroSedeTabla').value;
+        const cumplimiento = document.getElementById('filtroCumplimiento').value;
 
-        const res = await fetch(`/listar-equipos?q=${encodeURIComponent(query)}&sede=${encodeURIComponent(sede)}`);
+        const res = await fetch(`/listar-equipos?q=${encodeURIComponent(query)}&sede=${encodeURIComponent(sede)}&cumplimiento=${encodeURIComponent(cumplimiento)}`);
         const data = await res.json();
         const tbody = document.getElementById('tablaEquipos');
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#6b7280;">No hay equipos que coincidan con la búsqueda.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#6b7280;">No hay equipos que coincidan con los filtros seleccionados.</td></tr>';
             return;
         }
 
-        tbody.innerHTML = data.map(eq => `
-            <tr>
-                <td><strong>${eq.serial}</strong></td>
-                <td>${eq.numero_inventario ? eq.numero_inventario : '-'}</td>
-                <td>${eq.nombre}</td>
-                <td>${eq.marca} ${eq.modelo}</td>
-                <td><span style="background-color: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px;">${eq.sede ? eq.sede : 'Sin Sede'}</span></td>
-                <td>${eq.ubicacion}</td>
-                <td><span style="color: ${eq.estado === 'Operativo' ? '#059669' : '#dc2626'}; font-weight: bold;">${eq.estado}</span></td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = data.map(eq => {
+            let badgeClass = 'badge-success';
+            if (eq.cumplimiento_pmp === 'En Mora') badgeClass = 'badge-danger';
+            if (eq.cumplimiento_pmp === 'Aplazado') badgeClass = 'badge-warning';
+
+            return `
+                <tr>
+                    <td><strong>${eq.serial}</strong></td>
+                    <td>${eq.numero_inventario ? eq.numero_inventario : '-'}</td>
+                    <td>${eq.nombre} <br><small style="color:#6b7280;">${eq.marca} ${eq.modelo}</small></td>
+                    <td><strong>${eq.sede ? eq.sede : 'Sin Sede'}</strong><br><small style="color:#6b7280;">${eq.ubicacion}</small></td>
+                    <td>${eq.ultimo_mantenimiento}</td>
+                    <td>${eq.aplazado === 'Sí' ? '⚠️ Sí' : 'No'}</td>
+                    <td><span class="badge ${badgeClass}">${eq.cumplimiento_pmp}</span></td>
+                </tr>
+            `;
+        }).join('');
     }
 
     function descargarExcelConFiltro() {
         const sede = document.getElementById('filtroSedeTabla').value;
-        window.location.href = `/descargar-excel?sede=${encodeURIComponent(sede)}`;
+        const cumplimiento = document.getElementById('filtroCumplimiento').value;
+        window.location.href = `/descargar-excel?sede=${encodeURIComponent(sede)}&cumplimiento=${encodeURIComponent(cumplimiento)}`;
     }
 
     let timeoutBuscar;
     function buscarEquipos() {
         clearTimeout(timeoutBuscar);
-        timeoutBuscar = setTimeout(() => {
-            cargarEquipos();
-        }, 300);
+        timeoutBuscar = setTimeout(() => { cargarEquipos(); }, 300);
     }
 
     cargarListaSedes().then(() => cargarEquipos());
