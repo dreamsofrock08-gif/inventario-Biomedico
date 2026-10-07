@@ -8,6 +8,8 @@ app = Flask(__name__)
 CORS(app)
 DB_NAME = "inventario.db"
 
+MESES_ORDEN = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -21,14 +23,22 @@ def init_db():
             numero_inventario TEXT,
             sede TEXT,
             ubicacion TEXT,
-            estado TEXT
+            estado TEXT,
+            frecuencia_pmp TEXT,
+            meses_programados TEXT,
+            ultimo_mantenimiento TEXT,
+            aplazado TEXT,
+            cumplimiento_pmp TEXT
         )
     ''')
-    for col in ["numero_inventario", "sede"]:
+    
+    columnas_nuevas = ["numero_inventario", "sede", "frecuencia_pmp", "meses_programados", "ultimo_mantenimiento", "aplazado", "cumplimiento_pmp"]
+    for col in columnas_nuevas:
         try:
             cursor.execute(f"ALTER TABLE equipos ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass
+            
     conn.commit()
     conn.close()
 
@@ -51,7 +61,11 @@ def obtener_sedes():
 def verificar_serial(serial):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado FROM equipos WHERE UPPER(serial) = UPPER(?)", (serial.strip(),))
+    cursor.execute('''
+        SELECT id, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado, 
+               frecuencia_pmp, meses_programados, ultimo_mantenimiento, aplazado, cumplimiento_pmp 
+        FROM equipos WHERE UPPER(serial) = UPPER(?)
+    ''', (serial.strip(),))
     equipo = cursor.fetchone()
     conn.close()
 
@@ -66,7 +80,12 @@ def verificar_serial(serial):
                 "numero_inventario": equipo[4] if equipo[4] else "",
                 "sede": equipo[5] if equipo[5] else "",
                 "ubicacion": equipo[6] if equipo[6] else "",
-                "estado": equipo[7] if equipo[7] else "Operativo"
+                "estado": equipo[7] if equipo[7] else "Operativo",
+                "frecuencia_pmp": equipo[8] if equipo[8] else "No especificada",
+                "meses_programados": equipo[9] if equipo[9] else "No especificado",
+                "ultimo_mantenimiento": equipo[10] if equipo[10] else "Sin registro OK",
+                "aplazado": equipo[11] if equipo[11] else "No",
+                "cumplimiento_pmp": equipo[12] if equipo[12] else "Pendiente"
             }
         })
     return jsonify({"existe": False})
@@ -84,14 +103,14 @@ def agregar_equipo():
     estado = data.get('estado', 'Operativo').strip()
 
     if not all([serial, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado]):
-        return jsonify({"status": "error", "message": "Todos los campos son obligatorios"}), 400
+        return jsonify({"status": "error", "message": "Todos los campos obligatorios deben estar diligenciados"}), 400
 
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado, cumplimiento_pmp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Al Día')
         ''', (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado))
         conn.commit()
         conn.close()
@@ -112,7 +131,7 @@ def actualizar_equipo():
     estado = data.get('estado', 'Operativo').strip()
 
     if not all([serial, nombre, marca, modelo, numero_inventario, sede, ubicacion, estado]):
-        return jsonify({"status": "error", "message": "Todos los campos son obligatorios"}), 400
+        return jsonify({"status": "error", "message": "Todos los campos obligatorios deben estar diligenciados"}), 400
 
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -141,15 +160,25 @@ def cargar_excel():
         file_bytes = io.BytesIO(file.read())
         df_raw = pd.read_excel(file_bytes, header=None)
         
-        header_row_index = None
+        # Detectar fila de encabezados
+        header_row_index = 3
         for idx in range(min(15, len(df_raw))):
             row_values = [str(val).strip().upper() for val in df_raw.iloc[idx].values if pd.notna(val)]
             if any('SERIE' in v or 'SERIAL' in v for v in row_values) and any('NOMBRE' in v or 'EQUIPO' in v for v in row_values):
                 header_row_index = idx
                 break
 
-        if header_row_index is None:
-            header_row_index = 0
+        # Mapa de columnas por mes en el formato Excel
+        meses_cols = {}
+        curr_mes = None
+        for col_idx in range(25, min(80, df_raw.shape[1])):
+            val_f2 = str(df_raw.iloc[2, col_idx]).strip().upper() if len(df_raw) > 2 else ""
+            if val_f2 in MESES_ORDEN:
+                curr_mes = val_f2
+            if curr_mes:
+                if curr_mes not in meses_cols:
+                    meses_cols[curr_mes] = []
+                meses_cols[curr_mes].append(col_idx)
 
         file_bytes.seek(0)
         df = pd.read_excel(file_bytes, header=header_row_index)
@@ -167,6 +196,8 @@ def cargar_excel():
         col_sede = next((col for col in ['SEDE', 'UNIDAD DE NEGOCIO', 'CENTRO DE COSTO'] if col in df.columns), None)
         col_ubicacion = next((col for col in ['UBICACIÓN ESPECIFICA', 'UBICACION ESPECIFICA', 'UBICACION'] if col in df.columns), None)
         col_estado = next((col for col in ['ESTADO', 'TIPO DE INTERVENCIÓN', 'TIPO DE INTERVENCION'] if col in df.columns), None)
+        col_frec = next((col for col in ['FRECUENCIA'] if col in df.columns), None)
+        col_meses = next((col for col in ['MESES', 'MESES '] if col in df.columns), None)
 
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -174,7 +205,7 @@ def cargar_excel():
         agregados = 0
         omitidos_duplicados = 0
 
-        for _, row in df.iterrows():
+        for r_idx, row in df.iterrows():
             serial = str(row[col_serial]).strip() if pd.notna(row[col_serial]) else ""
             nombre = str(row[col_nombre]).strip() if pd.notna(row[col_nombre]) else ""
 
@@ -187,12 +218,43 @@ def cargar_excel():
             sede = str(row[col_sede]).strip() if col_sede and pd.notna(row[col_sede]) else ""
             ubicacion = str(row[col_ubicacion]).strip() if col_ubicacion and pd.notna(row[col_ubicacion]) else ""
             estado = str(row[col_estado]).strip() if col_estado and pd.notna(row[col_estado]) else "Operativo"
+            frecuencia = str(row[col_frec]).strip() if col_frec and pd.notna(row[col_frec]) else ""
+            meses_prog = str(row[col_meses]).strip() if col_meses and pd.notna(row[col_meses]) else ""
+
+            # Auditoría de Mantenimiento Preventivo (PMP)
+            row_raw_idx = r_idx + header_row_index + 1
+            ult_ok = "Ninguno"
+            hubo_aplazamiento = "No"
+            tiene_pendiente = False
+
+            if row_raw_idx < len(df_raw):
+                for m_nombre in MESES_ORDEN:
+                    if m_nombre in meses_cols:
+                        cols_m = meses_cols[m_nombre]
+                        vals = [str(df_raw.iloc[row_raw_idx, c]).strip().upper() for c in cols_m if c < df_raw.shape[1] and pd.notna(df_raw.iloc[row_raw_idx, c])]
+                        
+                        if 'OK' in vals:
+                            ult_ok = m_nombre
+                        if any(v in ['IF', 'R', 'REPROGRAMADO', 'APLAZADO'] for v in vals):
+                            hubo_aplazamiento = "Sí"
+                        if 'PG' in vals:
+                            tiene_pendiente = True
+
+            if ult_ok != "Ninguno" and not tiene_pendiente:
+                cumplimiento = "Al Día"
+            elif hubo_aplazamiento == "Sí":
+                cumplimiento = "Aplazado"
+            elif tiene_pendiente:
+                cumplimiento = "En Mora"
+            else:
+                cumplimiento = "Al Día"
 
             try:
                 cursor.execute('''
-                    INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, estado))
+                    INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado, 
+                                        frecuencia_pmp, meses_programados, ultimo_mantenimiento, aplazado, cumplimiento_pmp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, estado, frecuencia, meses_prog, ult_ok, hubo_aplazamiento, cumplimiento))
                 agregados += 1
             except sqlite3.IntegrityError:
                 omitidos_duplicados += 1
@@ -202,7 +264,7 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f"Carga completada. Equipos nuevos registrados: {agregados}. Equipos omitidos (serial duplicado): {omitidos_duplicados}."
+            "message": f"Carga completada. Equipos procesados con auditoría PMP: {agregados}. Duplicados omitidos: {omitidos_duplicados}."
         })
 
     except Exception as e:
@@ -224,16 +286,23 @@ def limpiar_bd():
 def listar_equipos():
     query = request.args.get('q', '').strip()
     filter_sede = request.args.get('sede', '').strip()
+    filter_cumplimiento = request.args.get('cumplimiento', '').strip()
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    sql = 'SELECT id, nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado FROM equipos WHERE 1=1'
+    sql = '''SELECT id, nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado, 
+                    frecuencia_pmp, meses_programados, ultimo_mantenimiento, aplazado, cumplimiento_pmp 
+             FROM equipos WHERE 1=1'''
     params = []
 
     if filter_sede:
         sql += ' AND UPPER(sede) = UPPER(?)'
         params.append(filter_sede)
+
+    if filter_cumplimiento:
+        sql += ' AND UPPER(cumplimiento_pmp) = UPPER(?)'
+        params.append(filter_cumplimiento)
 
     if query:
         search_pattern = f"%{query}%"
@@ -247,8 +316,10 @@ def listar_equipos():
     conn.close()
 
     equipos = [{
-        "id": f[0], "nombre": f[1], "marca": f[2], "modelo": f[3],
-        "serial": f[4], "numero_inventario": f[5], "sede": f[6], "ubicacion": f[7], "estado": f[8]
+        "id": f[0], "nombre": f[1], "marca": f[2], "modelo": f[3], "serial": f[4], 
+        "numero_inventario": f[5], "sede": f[6], "ubicacion": f[7], "estado": f[8],
+        "frecuencia_pmp": f[9], "meses_programados": f[10], "ultimo_mantenimiento": f[11],
+        "aplazado": f[12], "cumplimiento_pmp": f[13]
     } for f in filas]
 
     return jsonify(equipos)
@@ -256,25 +327,29 @@ def listar_equipos():
 @app.route('/descargar-excel', methods=['GET'])
 def descargar_excel():
     filter_sede = request.args.get('sede', '').strip()
-    conn = sqlite3.connect(DB_NAME)
+    filter_cumplimiento = request.args.get('cumplimiento', '').strip()
     
+    conn = sqlite3.connect(DB_NAME)
+    sql = '''
+        SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, 
+               serial AS SERIAL, numero_inventario AS "NO. INVENTARIO", 
+               sede AS SEDE, ubicacion AS UBICACION, estado AS ESTADO,
+               frecuencia_pmp AS "FRECUENCIA PMP", meses_programados AS "MESES PROGRAMADOS",
+               ultimo_mantenimiento AS "ULTIMO MANTENIMIENTO (OK)",
+               aplazado AS "HUBO APLAZAMIENTO", cumplimiento_pmp AS "CUMPLIMIENTO PMP"
+        FROM equipos WHERE 1=1
+    '''
+    params = []
+
     if filter_sede:
-        query = '''
-            SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, 
-                   serial AS SERIAL, numero_inventario AS "NO. INVENTARIO", 
-                   sede AS SEDE, ubicacion AS UBICACION, estado AS ESTADO 
-            FROM equipos WHERE UPPER(sede) = UPPER(?)
-        '''
-        df = pd.read_sql_query(query, conn, params=(filter_sede,))
-    else:
-        query = '''
-            SELECT id AS ID, nombre AS NOMBRE, marca AS MARCA, modelo AS MODELO, 
-                   serial AS SERIAL, numero_inventario AS "NO. INVENTARIO", 
-                   sede AS SEDE, ubicacion AS UBICACION, estado AS ESTADO 
-            FROM equipos
-        '''
-        df = pd.read_sql_query(query, conn)
-        
+        sql += ' AND UPPER(sede) = UPPER(?)'
+        params.append(filter_sede)
+
+    if filter_cumplimiento:
+        sql += ' AND UPPER(cumplimiento_pmp) = UPPER(?)'
+        params.append(filter_cumplimiento)
+
+    df = pd.read_sql_query(sql, conn, params=params)
     conn.close()
 
     output = io.BytesIO()
@@ -282,7 +357,7 @@ def descargar_excel():
         df.to_excel(writer, index=False, sheet_name='Inventario_General')
     
     output.seek(0)
-    filename = f"Inventario_{filter_sede.replace(' ', '_')}.xlsx" if filter_sede else "Inventario_Biomedico_Actualizado.xlsx"
+    filename = f"Inventario_{filter_sede if filter_sede else 'General'}_{filter_cumplimiento if filter_cumplimiento else 'Todos'}.xlsx".replace(' ', '_')
     return send_file(
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
