@@ -53,7 +53,6 @@ def datos_dashboard():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Total equipos aplicables a PMP (Excluyendo NO APLICA y BAJA)
     cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')")
     total_equipos_pmp = cursor.fetchone()[0]
 
@@ -69,7 +68,6 @@ def datos_dashboard():
     cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(estado) = 'FUERA DE SERVICIO' AND UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')")
     total_fuera_servicio = cursor.fetchone()[0]
 
-    # Desglose de razones para equipos NO REALIZADO
     cursor.execute('''
         SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Sin observación registrada') as razon, COUNT(*) 
         FROM equipos 
@@ -79,7 +77,6 @@ def datos_dashboard():
     ''')
     razones_no_realizado = [{"razon": row[0], "cantidad": row[1]} for row in cursor.fetchall()]
 
-    # Estadísticas por Sede (solo aplicables)
     cursor.execute('''
         SELECT sede, 
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'REALIZADO' THEN 1 ELSE 0 END) as realizado,
@@ -107,6 +104,57 @@ def datos_dashboard():
         "sedes_stats": [{
             "sede": s[0], "realizado": s[1], "no_realizado": s[2], "a_futuro": s[3]
         } for s in sedes_data]
+    })
+
+@app.route('/generar-informe-ejecutivo', methods=['GET'])
+def generar_informe_ejecutivo():
+    """Genera el desglose justificativo completo entre el Inventario Total y el Plan PMP."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM equipos")
+    total_inventario = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'NO APLICA'")
+    total_no_aplica = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'BAJA'")
+    total_baja = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'REALIZADO'")
+    total_realizado = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'NO REALIZADO'")
+    total_no_realizado = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'A FUTURO'")
+    total_a_futuro = cursor.fetchone()[0]
+
+    # Justificaciones de NO APLICA
+    cursor.execute('''
+        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Garantía extendida / Sin contrato N2 activo / Apoyo tecnológico') as razon, COUNT(*)
+        FROM equipos
+        WHERE UPPER(cumplimiento_pmp) = 'NO APLICA'
+        GROUP BY razon
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    ''')
+    razones_no_aplica = [{"razon": r[0], "cantidad": r[1]} for r in cursor.fetchall()]
+
+    conn.close()
+
+    total_pmp = total_realizado + total_no_realizado + total_a_futuro
+
+    return jsonify({
+        "total_inventario": total_inventario,
+        "total_pmp": total_pmp,
+        "total_no_aplica": total_no_aplica,
+        "total_baja": total_baja,
+        "total_realizado": total_realizado,
+        "total_no_realizado": total_no_realizado,
+        "total_a_futuro": total_a_futuro,
+        "porcentaje_cumplimiento": round((total_realizado / total_pmp * 100), 1) if total_pmp > 0 else 0,
+        "razones_no_aplica": razones_no_aplica
     })
 
 @app.route('/obtener-sedes', methods=['GET'])
@@ -169,7 +217,6 @@ def cargar_excel():
             serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
 
             if not nombre or not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
-                # Generar serial sintético si no tiene serial pero existe como equipo
                 serial = f"INV-{r_idx}-{str(df_raw.iloc[r_idx, 4]).strip()}"
 
             marca = str(df_raw.iloc[r_idx, 1]).strip() if pd.notna(df_raw.iloc[r_idx, 1]) else ""
@@ -181,7 +228,6 @@ def cargar_excel():
             meses_prog = str(df_raw.iloc[r_idx, 78]).strip() if pd.notna(df_raw.iloc[r_idx, 78]) else ""
             observacion = str(df_raw.iloc[r_idx, 79]).strip() if df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]) else ""
             
-            # Tomar Estado Final de la columna 82
             estado_final_raw = str(df_raw.iloc[r_idx, 82]).strip().upper() if df_raw.shape[1] > 82 and pd.notna(df_raw.iloc[r_idx, 82]) else "NO APLICA"
 
             if estado_final_raw in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
