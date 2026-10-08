@@ -3,29 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventario y Control de Mantenimiento Biomédico</title>
+    <title>Sistema de Gestión e Indicadores PMP Biomédico</title>
+    <!-- Chart.js para renderizar los gráficos del Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; }
-        .container { max-width: 1150px; margin: 0 auto; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        /* Navegación por pestañas */
+        .tabs { display: flex; border-bottom: 2px solid #cbd5e1; margin-bottom: 20px; }
+        .tab-btn { padding: 12px 24px; font-size: 16px; font-weight: bold; color: #64748b; background: none; border: none; cursor: pointer; border-bottom: 3px solid transparent; width: auto; }
+        .tab-btn.active { color: #1e3a8a; border-bottom: 3px solid #1e3a8a; background-color: #ffffff; border-radius: 8px 8px 0 0; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
         .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h2, h3 { color: #1e3a8a; margin-top: 0; }
         .form-group { margin-bottom: 15px; }
         label { display: block; font-weight: bold; margin-bottom: 5px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
         .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; display: none; }
         .alert-warning { background-color: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
         .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
         .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #4ade80; }
         .alert-info { background-color: #e0f2fe; color: #075985; border: 1px solid #38bdf8; }
-        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: background-color 0.2s; }
+
+        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
         button.btn-update { background-color: #d97706; }
-        button.btn-update:hover { background-color: #b45309; }
         button:disabled { background-color: #9ca3af; cursor: not-allowed; }
         .btn-excel { background-color: #059669; }
-        .btn-excel:hover { background-color: #047857; }
         .btn-danger { background-color: #dc2626; width: auto; font-size: 14px; padding: 8px 15px; }
-        .btn-danger:hover { background-color: #b91c1c; }
         .btn-descargar { background-color: #0284c7; width: auto; display: inline-block; padding: 10px 20px; text-decoration: none; color: white; border-radius: 4px; font-weight: bold; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
         th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
         th { background-color: #f3f4f6; color: #1f2937; }
@@ -34,143 +44,270 @@
         .badge-success { background-color: #dcfce7; color: #15803d; }
         .badge-danger { background-color: #fee2e2; color: #b91c1c; }
         .badge-warning { background-color: #fef3c7; color: #b45309; }
+
+        /* Estilos KPI Dashboard */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .kpi-card { background: #f8fafc; border-left: 5px solid #2563eb; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .kpi-card.green { border-left-color: #059669; }
+        .kpi-card.red { border-left-color: #dc2626; }
+        .kpi-card.amber { border-left-color: #d97706; }
+        .kpi-value { font-size: 28px; font-weight: bold; margin-top: 5px; color: #0f172a; }
+        .kpi-title { font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+        
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
 
 <div class="container">
 
-    <!-- SECCIÓN 1: CARGA MASIVA DESDE EXCEL CON AUDITORÍA PMP -->
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel (Cronograma PMP)</h3>
-            <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
-        </div>
-        <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube el Excel del cronograma. El sistema auditará automáticamente la última ejecución, aplazamientos y estado de cumplimiento.</p>
-        
-        <form id="excelForm" enctype="multipart/form-data">
-            <div class="form-group">
-                <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
-            </div>
-            <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Auditar Excel</button>
-        </form>
-        <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
+    <!-- BARRA DE NAVEGACIÓN PRINCIPAL -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="cambiarPestana('pestana-inventario', this)">📋 Gestión e Inventario</button>
+        <button class="tab-btn" onclick="cambiarPestana('pestana-dashboard', this)">📊 Dashboard Gerencial PMP</button>
     </div>
 
-    <!-- SECCIÓN 2: REGISTRO / EDICIÓN Y VALIDACIÓN INDIVIDUAL POR SERIAL -->
-    <div class="card">
-        <h2 id="tituloFormulario">🔍 Registro / Edición por Serial</h2>
-        
-        <div id="alertBox" class="alert"></div>
-
-        <form id="equipoForm">
-            <div class="form-group" style="display: flex; gap: 10px;">
-                <div style="flex: 1;">
-                    <label for="serial">Número de Serial / Serie *</label>
-                    <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
-                </div>
-                <div style="flex: 1;">
-                    <label for="numero_inventario">No. Inventario / Activo Fijo *</label>
-                    <input type="text" id="numero_inventario" placeholder="Ej: 153200031083" required>
-                </div>
+    <!-- PESTAÑA 1: GESTIÓN DE INVENTARIO -->
+    <div id="pestana-inventario" class="tab-content active">
+        <!-- SECCIÓN CARGA MASIVA -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
+                <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
             </div>
-
-            <div class="form-group">
-                <label for="nombre">Nombre del Equipo *</label>
-                <input type="text" id="nombre" placeholder="Ej: Monitor de Signos Vitales" required>
-            </div>
-
-            <div class="form-group" style="display: flex; gap: 10px;">
-                <div style="flex: 1;">
-                    <label for="marca">Marca *</label>
-                    <input type="text" id="marca" placeholder="Ej: Mindray" required>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube el Excel del cronograma. El sistema auditará la ejecución, aplazamientos y estado de cumplimiento.</p>
+            
+            <form id="excelForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
                 </div>
-                <div style="flex: 1;">
-                    <label for="modelo">Modelo *</label>
-                    <input type="text" id="modelo" placeholder="Ej: uMEC10" required>
-                </div>
-            </div>
+                <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Auditar Excel</button>
+            </form>
+            <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
+        </div>
 
-            <div class="form-group" style="display: flex; gap: 10px;">
-                <div style="flex: 1;">
-                    <label for="selectSede">Sede *</label>
-                    <select id="selectSede" required onchange="toggleNuevaSede(this.value)">
-                        <option value="">-- Seleccionar Sede --</option>
-                        <option value="__NUEVA__">+ Agregar nueva sede...</option>
+        <!-- SECCIÓN REGISTRO INDIVIDUAL -->
+        <div class="card">
+            <h2>🔍 Registro / Edición por Serial</h2>
+            <div id="alertBox" class="alert"></div>
+
+            <form id="equipoForm">
+                <div class="form-group" style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label for="serial">Número de Serial / Serie *</label>
+                        <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="numero_inventario">No. Inventario / Activo Fijo *</label>
+                        <input type="text" id="numero_inventario" placeholder="Ej: 153200031083" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="nombre">Nombre del Equipo *</label>
+                    <input type="text" id="nombre" placeholder="Ej: Monitor de Signos Vitales" required>
+                </div>
+
+                <div class="form-group" style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label for="marca">Marca *</label>
+                        <input type="text" id="marca" placeholder="Ej: Mindray" required>
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="modelo">Modelo *</label>
+                        <input type="text" id="modelo" placeholder="Ej: uMEC10" required>
+                    </div>
+                </div>
+
+                <div class="form-group" style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label for="selectSede">Sede *</label>
+                        <select id="selectSede" required onchange="toggleNuevaSede(this.value)">
+                            <option value="">-- Seleccionar Sede --</option>
+                            <option value="__NUEVA__">+ Agregar nueva sede...</option>
+                        </select>
+                        <input type="text" id="inputNuevaSede" placeholder="Escriba la nueva sede..." style="display: none; margin-top: 5px;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="ubicacion">Ubicación Específica *</label>
+                        <input type="text" id="ubicacion" placeholder="Ej: Torre A Piso 1 Micobacterias" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="estado">Estado *</label>
+                    <select id="estado" required>
+                        <option value="Operativo">Operativo</option>
+                        <option value="En Mantenimiento">En Mantenimiento</option>
+                        <option value="Fuera de Servicio">Fuera de Servicio</option>
                     </select>
-                    <input type="text" id="inputNuevaSede" placeholder="Escriba la nueva sede..." style="display: none; margin-top: 5px;">
+                </div>
+
+                <button type="submit" id="btnGuardar">💾 Guardar Equipo Nuevo</button>
+            </form>
+        </div>
+
+        <!-- SECCIÓN TABLA Y CONSULTA -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">📊 Control de Inventario</h3>
+                <a href="#" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Reporte Excel</a>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 12px;">Sede:</label>
+                    <select id="filtroSedeTabla" onchange="buscarEquipos()">
+                        <option value="">Todas las Sedes</option>
+                    </select>
                 </div>
                 <div style="flex: 1;">
-                    <label for="ubicacion">Ubicación Específica *</label>
-                    <input type="text" id="ubicacion" placeholder="Ej: Torre A Piso 1 Micobacterias" required>
+                    <label style="font-size: 12px;">Estado Mantenimiento (PMP):</label>
+                    <select id="filtroCumplimiento" onchange="buscarEquipos()">
+                        <option value="">Todos los Estados PMP</option>
+                        <option value="Al Día">🟢 Cumple / Al Día</option>
+                        <option value="En Mora">🔴 En Mora / Pendiente</option>
+                        <option value="Aplazado">🟡 Aplazado / Reprogramado</option>
+                    </select>
+                </div>
+                <div style="flex: 2;">
+                    <label style="font-size: 12px;">Buscar:</label>
+                    <input type="text" id="inputBuscar" placeholder="🔍 Serial, No. Inv, nombre..." onkeyup="buscarEquipos()">
                 </div>
             </div>
 
-            <div class="form-group">
-                <label for="estado">Estado *</label>
-                <select id="estado" required>
-                    <option value="Operativo">Operativo</option>
-                    <option value="En Mantenimiento">En Mantenimiento</option>
-                    <option value="Fuera de Servicio">Fuera de Servicio</option>
-                </select>
+            <div style="max-height: 450px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Serial</th>
+                            <th>No. Inv</th>
+                            <th>Nombre</th>
+                            <th>Sede / Ubicación</th>
+                            <th>Último Mantenimiento (OK)</th>
+                            <th>¿Aplazado?</th>
+                            <th>Estado PMP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaEquipos">
+                        <tr><td colspan="7">Cargando registros...</td></tr>
+                    </tbody>
+                </table>
             </div>
-
-            <button type="submit" id="btnGuardar">💾 Guardar Equipo Nuevo</button>
-        </form>
+        </div>
     </div>
 
-    <!-- SECCIÓN 3: CONSULTA, FILTRO DE CUMPLIMIENTO Y DESCARGA -->
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h3 style="margin: 0;">📊 Control de Inventario y Cumplimiento PMP</h3>
-            <a href="#" id="btnDescargarExcel" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Reporte en Excel</a>
-        </div>
+    <!-- PESTAÑA 2: DASHBOARD GERENCIAL -->
+    <div id="pestana-dashboard" class="tab-content">
+        <div class="card">
+            <h2>📈 Tablero Gerencial de Indicadores PMP</h2>
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+                Resumen ejecutivo para comités de mantenimiento, seguimiento de disponibilidad operativa y cierre de brechas.
+            </p>
 
-        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1;">
-                <label style="font-size: 12px;">Sede:</label>
-                <select id="filtroSedeTabla" onchange="buscarEquipos()">
-                    <option value="">Todas las Sedes</option>
-                </select>
+            <!-- TARJETAS DE INDICADORES CLAVE (KPIs) -->
+            <div class="kpi-grid">
+                <div class="kpi-card green">
+                    <div class="kpi-title">% Cumplimiento General</div>
+                    <div class="kpi-value" id="kpiPorcentaje">0%</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-title">Total Equipos Activos</div>
+                    <div class="kpi-value" id="kpiTotal">0</div>
+                </div>
+                <div class="kpi-card red">
+                    <div class="kpi-title">Equipos En Mora (Backlog)</div>
+                    <div class="kpi-value" id="kpiEnMora">0</div>
+                </div>
+                <div class="kpi-card amber">
+                    <div class="kpi-title">Mantenimientos Aplazados</div>
+                    <div class="kpi-value" id="kpiAplazados">0</div>
+                </div>
+                <div class="kpi-card red">
+                    <div class="kpi-title">Fuera de Servicio</div>
+                    <div class="kpi-value" id="kpiFueraServicio">0</div>
+                </div>
             </div>
-            <div style="flex: 1;">
-                <label style="font-size: 12px;">Estado Mantenimiento (PMP):</label>
-                <select id="filtroCumplimiento" onchange="buscarEquipos()">
-                    <option value="">Todos los Estados PMP</option>
-                    <option value="Al Día">🟢 Cumple / Al Día</option>
-                    <option value="En Mora">🔴 En Mora / Pendiente</option>
-                    <option value="Aplazado">🟡 Aplazado / Reprogramado</option>
-                </select>
-            </div>
-            <div style="flex: 2;">
-                <label style="font-size: 12px;">Búsqueda por palabra clave:</label>
-                <input type="text" id="inputBuscar" placeholder="🔍 Buscar por serial, No. Inv, nombre..." onkeyup="buscarEquipos()">
-            </div>
-        </div>
 
-        <div style="max-height: 450px; overflow-y: auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Serial</th>
-                        <th>No. Inv</th>
-                        <th>Nombre</th>
-                        <th>Sede / Ubicación</th>
-                        <th>Último Mantenimiento (OK)</th>
-                        <th>¿Aplazado?</th>
-                        <th>Estado PMP</th>
-                    </tr>
-                </thead>
-                <tbody id="tablaEquipos">
-                    <tr><td colspan="7">Cargando registros...</td></tr>
-                </tbody>
-            </table>
+            <!-- GRÁFICOS INTERACTIVOS -->
+            <div class="charts-grid">
+                <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
+                    <h3>Distribución de Cumplimiento PMP</h3>
+                    <canvas id="chartDonaCumplimiento" style="max-height: 280px;"></canvas>
+                </div>
+                <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
+                    <h3>Equipos En Mora / Pendientes por Sede</h3>
+                    <canvas id="chartBarrasSedes" style="max-height: 280px;"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 
 </div>
 
 <script>
+    let chartDona = null;
+    let chartBarras = null;
+
+    function cambiarPestana(idPestana, btn) {
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(tb => tb.classList.remove('active'));
+        
+        document.getElementById(idPestana).classList.add('active');
+        btn.classList.add('active');
+
+        if (idPestana === 'pestana-dashboard') {
+            cargarDatosDashboard();
+        }
+    }
+
+    async function cargarDatosDashboard() {
+        const res = await fetch('/datos-dashboard');
+        const data = await res.json();
+
+        // Actualizar tarjetas de KPI
+        document.getElementById('kpiPorcentaje').innerText = data.porcentaje_cumplimiento + '%';
+        document.getElementById('kpiTotal').innerText = data.total_equipos;
+        document.getElementById('kpiEnMora').innerText = data.total_en_mora;
+        document.getElementById('kpiAplazados').innerText = data.total_aplazados;
+        document.getElementById('kpiFueraServicio').innerText = data.total_fuera_servicio;
+
+        // Renderizar Gráfico de Dona (Cumplimiento)
+        const ctxDona = document.getElementById('chartDonaCumplimiento').getContext('2d');
+        if (chartDona) chartDona.destroy();
+        chartDona = new Chart(ctxDona, {
+            type: 'doughnut',
+            data: {
+                labels: ['Al Día (Cumple)', 'En Mora (Pendiente)', 'Aplazados'],
+                datasets: [{
+                    data: [data.total_al_dia, data.total_en_mora, data.total_aplazados],
+                    backgroundColor: ['#059669', '#dc2626', '#d97706']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Renderizar Gráfico de Barras por Sede
+        const labelsSedes = data.sedes_stats.map(s => s.sede);
+        const dataEnMora = data.sedes_stats.map(s => s.en_mora);
+        const dataAlDia = data.sedes_stats.map(s => s.al_dia);
+
+        const ctxBarras = document.getElementById('chartBarrasSedes').getContext('2d');
+        if (chartBarras) chartBarras.destroy();
+        chartBarras = new Chart(ctxBarras, {
+            type: 'bar',
+            data: {
+                labels: labelsSedes,
+                datasets: [
+                    { label: 'En Mora', data: dataEnMora, backgroundColor: '#dc2626' },
+                    { label: 'Al Día', data: dataAlDia, backgroundColor: '#059669' }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+        });
+    }
+
     const serialInput = document.getElementById('serial');
     const alertBox = document.getElementById('alertBox');
     const btnGuardar = document.getElementById('btnGuardar');
@@ -204,7 +341,6 @@
         }
     }
 
-    // Validación instantánea y autocompletado con datos de Mantenimiento
     serialInput.addEventListener('input', async () => {
         const serial = serialInput.value.trim();
         if (serial.length < 2) {
