@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestión e Indicadores PMP Biomédico</title>
+    <title>Sistema de Control y Dashboard PMP Biomédico</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; }
@@ -22,15 +22,12 @@
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         
         .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; display: none; }
-        .alert-warning { background-color: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
-        .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
-        .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #4ade80; }
         .alert-info { background-color: #e0f2fe; color: #075985; border: 1px solid #38bdf8; }
+        .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #4ade80; }
+        .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
 
-        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
-        button.btn-update { background-color: #d97706; }
-        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
-        .btn-excel { background-color: #059669; }
+        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .btn-excel { background-color: #059669; width: 100%; }
         .btn-danger { background-color: #dc2626; width: auto; font-size: 14px; padding: 8px 15px; }
         .btn-descargar { background-color: #0284c7; width: auto; display: inline-block; padding: 10px 20px; text-decoration: none; color: white; border-radius: 4px; font-weight: bold; }
 
@@ -38,21 +35,22 @@
         th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
         th { background-color: #f3f4f6; color: #1f2937; }
         tr:nth-child(even) { background-color: #f9fafb; }
-        .badge { padding: 3px 8px; border-radius: 12px; font-weight: bold; font-size: 11px; display: inline-block; }
-        .badge-success { background-color: #dcfce7; color: #15803d; }
-        .badge-danger { background-color: #fee2e2; color: #b91c1c; }
-        .badge-warning { background-color: #fef3c7; color: #b45309; }
-        .badge-info { background-color: #e0f2fe; color: #0369a1; }
+        
+        .badge { padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 11px; display: inline-block; }
+        .badge-realizado { background-color: #dcfce7; color: #15803d; }
+        .badge-no-realizado { background-color: #fee2e2; color: #b91c1c; }
+        .badge-futuro { background-color: #e0f2fe; color: #0369a1; }
+        .badge-no-aplica { background-color: #f1f5f9; color: #64748b; }
 
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        /* KPI Dashboard */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
         .kpi-card { background: #f8fafc; border-left: 5px solid #2563eb; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .kpi-card.green { border-left-color: #059669; }
         .kpi-card.red { border-left-color: #dc2626; }
-        .kpi-card.amber { border-left-color: #d97706; }
         .kpi-card.blue { border-left-color: #0284c7; }
-        .kpi-value { font-size: 26px; font-weight: bold; margin-top: 5px; color: #0f172a; }
+        .kpi-value { font-size: 28px; font-weight: bold; margin-top: 4px; color: #0f172a; }
         .kpi-title { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; }
-        
+
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
     </style>
@@ -62,92 +60,32 @@
 <div class="container">
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="cambiarPestana('pestana-inventario', this)">📋 Gestión e Inventario</button>
+        <button class="tab-btn active" onclick="cambiarPestana('pestana-inventario', this)">📋 Inventario General y Carga</button>
         <button class="tab-btn" onclick="cambiarPestana('pestana-dashboard', this)">📊 Dashboard Gerencial PMP</button>
     </div>
 
-    <!-- PESTAÑA 1 -->
+    <!-- PESTAÑA 1: CARGA Y TABLA GENERAL -->
     <div id="pestana-inventario" class="tab-content active">
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
                 <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
             </div>
-            <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube el Excel del cronograma. El sistema auditará mantenimientos ejecutados, en mora, aplazados y programados a futuro.</p>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Carga la base de datos oficial. Los registros "NO APLICA" y "BAJA" quedarán en el inventario general pero excluidos del Dashboard de Mantenimiento.</p>
             
             <form id="excelForm" enctype="multipart/form-data">
                 <div class="form-group">
                     <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
                 </div>
-                <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar y Auditar Excel</button>
+                <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar Archivo Excel</button>
             </form>
             <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
         </div>
 
         <div class="card">
-            <h2>🔍 Registro / Edición por Serial</h2>
-            <div id="alertBox" class="alert"></div>
-
-            <form id="equipoForm">
-                <div class="form-group" style="display: flex; gap: 10px;">
-                    <div style="flex: 1;">
-                        <label for="serial">Número de Serial / Serie *</label>
-                        <input type="text" id="serial" placeholder="Escriba o escanee el serial" required autocomplete="off">
-                    </div>
-                    <div style="flex: 1;">
-                        <label for="numero_inventario">No. Inventario / Activo Fijo *</label>
-                        <input type="text" id="numero_inventario" placeholder="Ej: 153200031083" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="nombre">Nombre del Equipo *</label>
-                    <input type="text" id="nombre" placeholder="Ej: Monitor de Signos Vitales" required>
-                </div>
-
-                <div class="form-group" style="display: flex; gap: 10px;">
-                    <div style="flex: 1;">
-                        <label for="marca">Marca *</label>
-                        <input type="text" id="marca" placeholder="Ej: Mindray" required>
-                    </div>
-                    <div style="flex: 1;">
-                        <label for="modelo">Modelo *</label>
-                        <input type="text" id="modelo" placeholder="Ej: uMEC10" required>
-                    </div>
-                </div>
-
-                <div class="form-group" style="display: flex; gap: 10px;">
-                    <div style="flex: 1;">
-                        <label for="selectSede">Sede *</label>
-                        <select id="selectSede" required onchange="toggleNuevaSede(this.value)">
-                            <option value="">-- Seleccionar Sede --</option>
-                            <option value="__NUEVA__">+ Agregar nueva sede...</option>
-                        </select>
-                        <input type="text" id="inputNuevaSede" placeholder="Escriba la nueva sede..." style="display: none; margin-top: 5px;">
-                    </div>
-                    <div style="flex: 1;">
-                        <label for="ubicacion">Ubicación Específica *</label>
-                        <input type="text" id="ubicacion" placeholder="Ej: Torre A Piso 1 Micobacterias" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="estado">Estado *</label>
-                    <select id="estado" required>
-                        <option value="Operativo">Operativo</option>
-                        <option value="En Mantenimiento">En Mantenimiento</option>
-                        <option value="Fuera de Servicio">Fuera de Servicio</option>
-                    </select>
-                </div>
-
-                <button type="submit" id="btnGuardar">💾 Guardar Equipo Nuevo</button>
-            </form>
-        </div>
-
-        <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">📊 Control de Inventario</h3>
-                <a href="#" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Reporte Excel</a>
+                <h3 style="margin: 0;">📊 Base de Datos General de Equipos</h3>
+                <a href="#" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Reporte Filtrado</a>
             </div>
 
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -158,32 +96,32 @@
                     </select>
                 </div>
                 <div style="flex: 1;">
-                    <label style="font-size: 12px;">Estado Mantenimiento (PMP):</label>
+                    <label style="font-size: 12px;">Estado Mantenimiento PMP:</label>
                     <select id="filtroCumplimiento" onchange="buscarEquipos()">
-                        <option value="">Todos los Estados PMP</option>
-                        <option value="Al Dia">🟢 Cumple / Al Día</option>
-                        <option value="En Mora">🔴 En Mora (Atrasado)</option>
-                        <option value="Aplazado">🟡 Aplazado / Reprogramado</option>
-                        <option value="Programado">🔵 Programado Futuro</option>
+                        <option value="">Todos los Estados</option>
+                        <option value="REALIZADO">🟢 REALIZADO</option>
+                        <option value="NO REALIZADO">🔴 NO REALIZADO (Pendiente)</option>
+                        <option value="A FUTURO">🔵 A FUTURO</option>
+                        <option value="NO APLICA">⚪ NO APLICA</option>
                     </select>
                 </div>
                 <div style="flex: 2;">
-                    <label style="font-size: 12px;">Buscar:</label>
-                    <input type="text" id="inputBuscar" placeholder="🔍 Serial, No. Inv, nombre..." onkeyup="buscarEquipos()">
+                    <label style="font-size: 12px;">Búsqueda por texto:</label>
+                    <input type="text" id="inputBuscar" placeholder="🔍 Serial, No. Inv, nombre equipo..." onkeyup="buscarEquipos()">
                 </div>
             </div>
 
-            <div style="max-height: 450px; overflow-y: auto;">
+            <div style="max-height: 480px; overflow-y: auto;">
                 <table>
                     <thead>
                         <tr>
                             <th>Serial</th>
                             <th>No. Inv</th>
-                            <th>Nombre</th>
+                            <th>Nombre del Equipo</th>
                             <th>Sede / Ubicación</th>
-                            <th>Último Mantenimiento (OK)</th>
-                            <th>¿Aplazado?</th>
+                            <th>Frecuencia</th>
                             <th>Estado PMP</th>
+                            <th>Observación / Razón</th>
                         </tr>
                     </thead>
                     <tbody id="tablaEquipos">
@@ -194,50 +132,62 @@
         </div>
     </div>
 
-    <!-- PESTAÑA 2 -->
+    <!-- PESTAÑA 2: DASHBOARD GERENCIAL (SIN 'NO APLICA') -->
     <div id="pestana-dashboard" class="tab-content">
         <div class="card">
-            <h2>📈 Tablero Gerencial de Indicadores PMP</h2>
+            <h2>📈 Tablero Gerencial de Indicadores PMP 2026</h2>
             <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-                Resumen ejecutivo para comités de mantenimiento, seguimiento de disponibilidad operativa y proyección de carga de trabajo.
+                * Excluye equipos clasificados como 'NO APLICA' o 'BAJA'. Muestra el cumplimiento real sobre el plan de mantenimiento exigible.
             </p>
 
             <div class="kpi-grid">
                 <div class="kpi-card green">
-                    <div class="kpi-title">% Cumplimiento Historico</div>
+                    <div class="kpi-title">% Cumplimiento PMP</div>
                     <div class="kpi-value" id="kpiPorcentaje">0%</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-title">Total Equipos Activos</div>
-                    <div class="kpi-value" id="kpiTotal">0</div>
+                    <div class="kpi-title">Equipos Sujetos a PMP</div>
+                    <div class="kpi-value" id="kpiTotalPmp">0</div>
+                </div>
+                <div class="kpi-card green">
+                    <div class="kpi-title">Mantenimientos Realizados</div>
+                    <div class="kpi-value" id="kpiRealizados">0</div>
                 </div>
                 <div class="kpi-card red">
-                    <div class="kpi-title">Equipos En Mora (Backlog)</div>
-                    <div class="kpi-value" id="kpiEnMora">0</div>
-                </div>
-                <div class="kpi-card amber">
-                    <div class="kpi-title">Mantenimientos Aplazados</div>
-                    <div class="kpi-value" id="kpiAplazados">0</div>
+                    <div class="kpi-title">No Realizados (Pendientes)</div>
+                    <div class="kpi-value" id="kpiNoRealizados">0</div>
                 </div>
                 <div class="kpi-card blue">
-                    <div class="kpi-title">Programados Futuro</div>
-                    <div class="kpi-value" id="kpiFuturos">0</div>
-                </div>
-                <div class="kpi-card red">
-                    <div class="kpi-title">Fuera de Servicio</div>
-                    <div class="kpi-value" id="kpiFueraServicio">0</div>
+                    <div class="kpi-title">Programados A Futuro</div>
+                    <div class="kpi-value" id="kpiAFuturo">0</div>
                 </div>
             </div>
 
             <div class="charts-grid">
                 <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
-                    <h3>Distribución General PMP</h3>
+                    <h3>Distribución de Cumplimiento PMP</h3>
                     <canvas id="chartDonaCumplimiento" style="max-height: 280px;"></canvas>
                 </div>
                 <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
-                    <h3>Estado por Sede (Mora vs Futuros vs Al Día)</h3>
+                    <h3>Realizados vs Pendientes por Sede</h3>
                     <canvas id="chartBarrasSedes" style="max-height: 280px;"></canvas>
                 </div>
+            </div>
+
+            <!-- TABLA DE RAZONES DE INCUMPLIMIENTO -->
+            <div style="margin-top: 25px;">
+                <h3>📋 Razones / Justificaciones de Equipos 'NO REALIZADO'</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Observación / Causal Registrada</th>
+                            <th style="width: 150px; text-align: center;">Cantidad Equipos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaRazones">
+                        <tr><td colspan="2">Cargando razones...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -265,30 +215,31 @@
         const data = await res.json();
 
         document.getElementById('kpiPorcentaje').innerText = data.porcentaje_cumplimiento + '%';
-        document.getElementById('kpiTotal').innerText = data.total_equipos;
-        document.getElementById('kpiEnMora').innerText = data.total_en_mora;
-        document.getElementById('kpiAplazados').innerText = data.total_aplazados;
-        document.getElementById('kpiFuturos').innerText = data.total_futuros;
-        document.getElementById('kpiFueraServicio').innerText = data.total_fuera_servicio;
+        document.getElementById('kpiTotalPmp').innerText = data.total_equipos_pmp;
+        document.getElementById('kpiRealizados').innerText = data.total_realizado;
+        document.getElementById('kpiNoRealizados').innerText = data.total_no_realizado;
+        document.getElementById('kpiAFuturo').innerText = data.total_a_futuro;
 
+        // Gráfico Dona
         const ctxDona = document.getElementById('chartDonaCumplimiento').getContext('2d');
         if (chartDona) chartDona.destroy();
         chartDona = new Chart(ctxDona, {
             type: 'doughnut',
             data: {
-                labels: ['Al Día (Ejecutados)', 'En Mora (Atrasados)', 'Aplazados', 'Programados Futuro'],
+                labels: ['Realizado', 'No Realizado (Pendiente)', 'A Futuro'],
                 datasets: [{
-                    data: [data.total_al_dia, data.total_en_mora, data.total_aplazados, data.total_futuros],
-                    backgroundColor: ['#059669', '#dc2626', '#d97706', '#0284c7']
+                    data: [data.total_realizado, data.total_no_realizado, data.total_a_futuro],
+                    backgroundColor: ['#059669', '#dc2626', '#0284c7']
                 }]
             },
             options: { responsive: true, maintainAspectRatio: false }
         });
 
+        // Gráfico Barras
         const labelsSedes = data.sedes_stats.map(s => s.sede);
-        const dataEnMora = data.sedes_stats.map(s => s.en_mora);
-        const dataAlDia = data.sedes_stats.map(s => s.al_dia);
-        const dataFuturos = data.sedes_stats.map(s => s.futuros);
+        const dataRealizado = data.sedes_stats.map(s => s.realizado);
+        const dataNoRealizado = data.sedes_stats.map(s => s.no_realizado);
+        const dataAFuturo = data.sedes_stats.map(s => s.a_futuro);
 
         const ctxBarras = document.getElementById('chartBarrasSedes').getContext('2d');
         if (chartBarras) chartBarras.destroy();
@@ -297,148 +248,36 @@
             data: {
                 labels: labelsSedes,
                 datasets: [
-                    { label: 'En Mora', data: dataEnMora, backgroundColor: '#dc2626' },
-                    { label: 'Al Día', data: dataAlDia, backgroundColor: '#059669' },
-                    { label: 'Programado Futuro', data: dataFuturos, backgroundColor: '#0284c7' }
+                    { label: 'Realizado', data: dataRealizado, backgroundColor: '#059669' },
+                    { label: 'No Realizado', data: dataNoRealizado, backgroundColor: '#dc2626' },
+                    { label: 'A Futuro', data: dataAFuturo, backgroundColor: '#0284c7' }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
         });
-    }
 
-    const serialInput = document.getElementById('serial');
-    const alertBox = document.getElementById('alertBox');
-    const btnGuardar = document.getElementById('btnGuardar');
-    let esModoEdicion = false;
+        // Tabla de Razones
+        const tbodyRazones = document.getElementById('tablaRazones');
+        if (data.razones_no_realizado.length === 0) {
+            tbodyRazones.innerHTML = '<tr><td colspan="2" style="text-align:center;">No hay equipos no realizados.</td></tr>';
+        } else {
+            tbodyRazones.innerHTML = data.razones_no_realizado.map(r => `
+                <tr>
+                    <td>${r.razon}</td>
+                    <td style="text-align:center; font-weight:bold; color:#dc2626;">${r.cantidad}</td>
+                </tr>
+            `).join('');
+        }
+    }
 
     async function cargarListaSedes() {
         const res = await fetch('/obtener-sedes');
         const sedes = await res.json();
         
-        const selectSedeForm = document.getElementById('selectSede');
         const selectSedeFiltro = document.getElementById('filtroSedeTabla');
-
-        selectSedeForm.innerHTML = '<option value="">-- Seleccionar Sede --</option><option value="__NUEVA__">+ Agregar nueva sede...</option>';
-        sedes.forEach(s => { selectSedeForm.innerHTML += `<option value="${s}">${s}</option>`; });
-
-        const sedeActualFiltro = selectSedeFiltro.value;
         selectSedeFiltro.innerHTML = '<option value="">Todas las Sedes</option>';
         sedes.forEach(s => { selectSedeFiltro.innerHTML += `<option value="${s}">${s}</option>`; });
-        selectSedeFiltro.value = sedeActualFiltro;
     }
-
-    function toggleNuevaSede(value) {
-        const inputNueva = document.getElementById('inputNuevaSede');
-        if (value === '__NUEVA__') {
-            inputNueva.style.display = 'block';
-            inputNueva.required = true;
-        } else {
-            inputNueva.style.display = 'none';
-            inputNueva.required = false;
-            inputNueva.value = '';
-        }
-    }
-
-    serialInput.addEventListener('input', async () => {
-        const serial = serialInput.value.trim();
-        if (serial.length < 2) {
-            alertBox.style.display = 'none';
-            resetearModoFormulario();
-            return;
-        }
-
-        const response = await fetch(`/verificar-serial/${encodeURIComponent(serial)}`);
-        const data = await response.json();
-
-        if (data.existe) {
-            esModoEdicion = true;
-            const eq = data.equipo;
-
-            document.getElementById('nombre').value = eq.nombre || '';
-            document.getElementById('numero_inventario').value = eq.numero_inventario || '';
-            document.getElementById('marca').value = eq.marca || '';
-            document.getElementById('modelo').value = eq.modelo || '';
-            document.getElementById('ubicacion').value = eq.ubicacion || '';
-            document.getElementById('estado').value = eq.estado || 'Operativo';
-
-            const selectSede = document.getElementById('selectSede');
-            if (eq.sede && [...selectSede.options].some(o => o.value === eq.sede)) {
-                selectSede.value = eq.sede;
-                toggleNuevaSede(eq.sede);
-            } else if (eq.sede) {
-                selectSede.value = '__NUEVA__';
-                toggleNuevaSede('__NUEVA__');
-                document.getElementById('inputNuevaSede').value = eq.sede;
-            }
-
-            alertBox.className = 'alert alert-warning';
-            alertBox.innerHTML = `⚠️ <strong>EQUIPO REGISTRADO EN SISTEMA</strong><br>
-                Último Mantenimiento OK: <strong>${eq.ultimo_mantenimiento}</strong> | Aplazamientos: <strong>${eq.aplazado}</strong> | Estado PMP: <strong>${eq.cumplimiento_pmp}</strong><br>
-                Modifica la ubicación o estado y presiona <strong>"Actualizar Datos del Equipo"</strong>.`;
-            alertBox.style.display = 'block';
-
-            btnGuardar.innerText = '✏️ Actualizar Datos del Equipo';
-            btnGuardar.className = 'btn-update';
-        } else {
-            esModoEdicion = false;
-            alertBox.className = 'alert alert-success';
-            alertBox.innerHTML = ' Display / Serial no registrado. Ingresa todos los datos requeridos para guardar.';
-            alertBox.style.display = 'block';
-
-            btnGuardar.innerText = '💾 Guardar Equipo Nuevo';
-            btnGuardar.className = '';
-        }
-    });
-
-    function resetearModoFormulario() {
-        esModoEdicion = false;
-        btnGuardar.innerText = '💾 Guardar Equipo Nuevo';
-        btnGuardar.className = '';
-    }
-
-    document.getElementById('equipoForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const serial = document.getElementById('serial').value.trim();
-        const numero_inventario = document.getElementById('numero_inventario').value.trim();
-        const nombre = document.getElementById('nombre').value.trim();
-        const marca = document.getElementById('marca').value.trim();
-        const modelo = document.getElementById('modelo').value.trim();
-        const ubicacion = document.getElementById('ubicacion').value.trim();
-        const estado = document.getElementById('estado').value.trim();
-
-        let sedeSeleccionada = document.getElementById('selectSede').value;
-        if (sedeSeleccionada === '__NUEVA__') {
-            sedeSeleccionada = document.getElementById('inputNuevaSede').value.trim();
-        }
-
-        if (!serial || !numero_inventario || !nombre || !marca || !modelo || !sedeSeleccionada || !ubicacion || !estado) {
-            alert('⚠️ Todos los campos son obligatorios.');
-            return;
-        }
-
-        const payload = { serial, numero_inventario, nombre, marca, modelo, sede: sedeSeleccionada, ubicacion, estado };
-        const endpoint = esModoEdicion ? '/actualizar-equipo' : '/agregar-equipo';
-
-        const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await res.json();
-        if (res.ok) {
-            alert(esModoEdicion ? '✅ Equipo actualizado con éxito' : '✅ Equipo guardado con éxito');
-            document.getElementById('equipoForm').reset();
-            toggleNuevaSede('');
-            alertBox.style.display = 'none';
-            resetearModoFormulario();
-            await cargarListaSedes();
-            cargarEquipos();
-        } else {
-            alert('❌ Error: ' + result.message);
-        }
-    });
 
     document.getElementById('excelForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -452,9 +291,8 @@
         formData.append('archivo_excel', fileInput.files[0]);
 
         btnSubir.disabled = true;
-        btnSubir.innerText = 'Auditando y Procesando Excel...';
+        btnSubir.innerText = 'Procesando archivo...';
         resultadoDiv.style.display = 'block';
-        resultadoDiv.innerText = 'Procesando historial de mantenimiento preventivo...';
 
         try {
             const res = await fetch('/cargar-excel', { method: 'POST', body: formData });
@@ -471,23 +309,21 @@
             }
         } catch (err) {
             resultadoDiv.className = 'alert alert-danger';
-            resultadoDiv.innerText = 'Error de conexión al procesar el archivo.';
+            resultadoDiv.innerText = 'Error de conexión con el servidor.';
         } finally {
             btnSubir.disabled = false;
-            btnSubir.innerText = 'Procesar y Auditar Excel';
+            btnSubir.innerText = 'Procesar Archivo Excel';
         }
     });
 
     async function limpiarBaseDatos() {
-        if (!confirm("⚠️ ¿Estás seguro de vaciar toda la base de datos actual? Esta acción no se puede deshacer.")) return;
+        if (!confirm("⚠️ ¿Deseas vaciar la base de datos actual?")) return;
         const res = await fetch('/limpiar-bd', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
-            alert("🧹 " + data.message);
+            alert("🧹 Base de datos reiniciada.");
             await cargarListaSedes();
             cargarEquipos();
-        } else {
-            alert("❌ Error: " + data.message);
         }
     }
 
@@ -501,25 +337,25 @@
         const tbody = document.getElementById('tablaEquipos');
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#6b7280;">No hay equipos que coincidan con los filtros seleccionados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#6b7280;">No hay registros.</td></tr>';
             return;
         }
 
         tbody.innerHTML = data.map(eq => {
-            let badgeClass = 'badge-success';
-            if (eq.cumplimiento_pmp === 'En Mora') badgeClass = 'badge-danger';
-            if (eq.cumplimiento_pmp === 'Aplazado') badgeClass = 'badge-warning';
-            if (eq.cumplimiento_pmp === 'Programado Futuro') badgeClass = 'badge-info';
+            let badgeClass = 'badge-no-aplica';
+            if (eq.cumplimiento_pmp === 'REALIZADO') badgeClass = 'badge-realizado';
+            if (eq.cumplimiento_pmp === 'NO REALIZADO') badgeClass = 'badge-no-realizado';
+            if (eq.cumplimiento_pmp === 'A FUTURO') badgeClass = 'badge-futuro';
 
             return `
                 <tr>
                     <td><strong>${eq.serial}</strong></td>
                     <td>${eq.numero_inventario ? eq.numero_inventario : '-'}</td>
                     <td>${eq.nombre} <br><small style="color:#6b7280;">${eq.marca} ${eq.modelo}</small></td>
-                    <td><strong>${eq.sede ? eq.sede : 'Sin Sede'}</strong><br><small style="color:#6b7280;">${eq.ubicacion}</small></td>
-                    <td>${eq.ultimo_mantenimiento}</td>
-                    <td>${eq.aplazado === 'Sí' ? '⚠️ Sí' : 'No'}</td>
+                    <td><strong>${eq.sede}</strong><br><small style="color:#6b7280;">${eq.ubicacion}</small></td>
+                    <td>${eq.frecuencia_pmp}</td>
                     <td><span class="badge ${badgeClass}">${eq.cumplimiento_pmp}</span></td>
+                    <td style="font-size:12px; color:#475569;">${eq.observacion ? eq.observacion : '-'}</td>
                 </tr>
             `;
         }).join('');
