@@ -50,36 +50,35 @@ def index():
 
 @app.route('/datos-dashboard', methods=['GET'])
 def datos_dashboard():
-    """Retorna las estadísticas e indicadores gerenciales para el Dashboard."""
+    """Calcula y retorna las estadísticas en tiempo real para el Dashboard Gerencial."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Totales generales
     cursor.execute("SELECT COUNT(*) FROM equipos")
     total_equipos = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'AL DÍA'")
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) LIKE '%AL DIA%' OR UPPER(cumplimiento_pmp) LIKE '%AL DÍa%' OR UPPER(cumplimiento_pmp) LIKE '%AL DÍA%'")
     total_al_dia = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'EN MORA'")
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) LIKE '%EN MORA%'")
     total_en_mora = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(aplazado) = 'SÍ' OR UPPER(cumplimiento_pmp) = 'APLAZADO'")
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(aplazado) LIKE '%SÍ%' OR UPPER(aplazado) LIKE '%SI%' OR UPPER(cumplimiento_pmp) LIKE '%APLAZADO%'")
     total_aplazados = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(estado) = 'FUERA DE SERVICIO'")
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(estado) LIKE '%FUERA DE SERVICIO%'")
     total_fuera_servicio = cursor.fetchone()[0]
 
-    # Distribución por Sede y Cumplimiento
+    # Estadísticas desglosadas por Sede
     cursor.execute('''
         SELECT sede, 
-               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'AL DÍA' THEN 1 ELSE 0 END) as al_dia,
-               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'EN MORA' THEN 1 ELSE 0 END) as en_mora,
-               SUM(CASE WHEN UPPER(estado) = 'FUERA DE SERVICIO' THEN 1 ELSE 0 END) as fuera_servicio
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) LIKE '%AL D%' THEN 1 ELSE 0 END) as al_dia,
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) LIKE '%EN MORA%' THEN 1 ELSE 0 END) as en_mora,
+               SUM(CASE WHEN UPPER(estado) LIKE '%FUERA DE SERVICIO%' THEN 1 ELSE 0 END) as fuera_servicio
         FROM equipos 
         WHERE sede IS NOT NULL AND TRIM(sede) != ''
         GROUP BY sede
-        ORDER BY en_mora DESC, total_equipos DESC
+        ORDER BY en_mora DESC, COUNT(*) DESC
     ''')
     sedes_data = cursor.fetchall()
 
@@ -158,7 +157,7 @@ def agregar_equipo():
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO equipos (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado, cumplimiento_pmp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Al Día')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Al Dia')
         ''', (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion, estado))
         conn.commit()
         conn.close()
@@ -215,6 +214,7 @@ def cargar_excel():
                 header_row_index = idx
                 break
 
+        # Mapeo preciso de subcolumnas por mes
         meses_cols = {}
         curr_mes = None
         for col_idx in range(25, min(80, df_raw.shape[1])):
@@ -286,13 +286,13 @@ def cargar_excel():
                             tiene_pendiente = True
 
             if ult_ok != "Ninguno" and not tiene_pendiente:
-                cumplimiento = "Al Día"
+                cumplimiento = "Al Dia"
             elif hubo_aplazamiento == "Sí":
                 cumplimiento = "Aplazado"
             elif tiene_pendiente:
                 cumplimiento = "En Mora"
             else:
-                cumplimiento = "Al Día"
+                cumplimiento = "Al Dia"
 
             try:
                 cursor.execute('''
@@ -346,8 +346,8 @@ def listar_equipos():
         params.append(filter_sede)
 
     if filter_cumplimiento:
-        sql += ' AND UPPER(cumplimiento_pmp) = UPPER(?)'
-        params.append(filter_cumplimiento)
+        sql += ' AND (UPPER(cumplimiento_pmp) LIKE UPPER(?) OR UPPER(cumplimiento_pmp) LIKE UPPER(?))'
+        params.extend([f"%{filter_cumplimiento}%", f"%{filter_cumplimiento.replace('Día', 'Dia')}%"])
 
     if query:
         search_pattern = f"%{query}%"
@@ -391,8 +391,8 @@ def descargar_excel():
         params.append(filter_sede)
 
     if filter_cumplimiento:
-        sql += ' AND UPPER(cumplimiento_pmp) = UPPER(?)'
-        params.append(filter_cumplimiento)
+        sql += ' AND UPPER(cumplimiento_pmp) LIKE UPPER(?)'
+        params.append(f"%{filter_cumplimiento}%")
 
     df = pd.read_sql_query(sql, conn, params=params)
     conn.close()
@@ -402,7 +402,7 @@ def descargar_excel():
         df.to_excel(writer, index=False, sheet_name='Inventario_General')
     
     output.seek(0)
-    filename = f"Inventario_{filter_sede if filter_sede else 'General'}_{filter_cumplimiento if filter_cumplimiento else 'Todos'}.xlsx".replace(' ', '_')
+    filename = f"Inventario_{filter_sede if filter_sede else 'General'}.xlsx".replace(' ', '_')
     return send_file(
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
