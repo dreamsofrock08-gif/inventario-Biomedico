@@ -9,6 +9,7 @@ CORS(app)
 DB_NAME = "inventario.db"
 
 MESES_ORDEN = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+MES_ACTUAL_IDX = 8  # Considerando Octubre (índice 9 en año completo, Septiembre consumido)
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -50,14 +51,14 @@ def index():
 
 @app.route('/datos-dashboard', methods=['GET'])
 def datos_dashboard():
-    """Calcula y retorna las estadísticas en tiempo real para el Dashboard Gerencial."""
+    """Calcula estadísticas gerenciales dividiendo ejecutados, en mora, aplazados y programados a futuro."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
     cursor.execute("SELECT COUNT(*) FROM equipos")
     total_equipos = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) LIKE '%AL DIA%' OR UPPER(cumplimiento_pmp) LIKE '%AL DÍa%' OR UPPER(cumplimiento_pmp) LIKE '%AL DÍA%'")
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) LIKE '%AL DIA%' OR UPPER(cumplimiento_pmp) LIKE '%AL DÍA%'")
     total_al_dia = cursor.fetchone()[0]
 
     cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) LIKE '%EN MORA%'")
@@ -65,6 +66,9 @@ def datos_dashboard():
 
     cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(aplazado) LIKE '%SÍ%' OR UPPER(aplazado) LIKE '%SI%' OR UPPER(cumplimiento_pmp) LIKE '%APLAZADO%'")
     total_aplazados = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) LIKE '%PROGRAMADO%' OR UPPER(cumplimiento_pmp) LIKE '%FUTURO%'")
+    total_futuros = cursor.fetchone()[0]
 
     cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(estado) LIKE '%FUERA DE SERVICIO%'")
     total_fuera_servicio = cursor.fetchone()[0]
@@ -74,6 +78,7 @@ def datos_dashboard():
         SELECT sede, 
                SUM(CASE WHEN UPPER(cumplimiento_pmp) LIKE '%AL D%' THEN 1 ELSE 0 END) as al_dia,
                SUM(CASE WHEN UPPER(cumplimiento_pmp) LIKE '%EN MORA%' THEN 1 ELSE 0 END) as en_mora,
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) LIKE '%PROGRAMADO%' OR UPPER(cumplimiento_pmp) LIKE '%FUTURO%' THEN 1 ELSE 0 END) as futuros,
                SUM(CASE WHEN UPPER(estado) LIKE '%FUERA DE SERVICIO%' THEN 1 ELSE 0 END) as fuera_servicio
         FROM equipos 
         WHERE sede IS NOT NULL AND TRIM(sede) != ''
@@ -91,10 +96,11 @@ def datos_dashboard():
         "total_al_dia": total_al_dia,
         "total_en_mora": total_en_mora,
         "total_aplazados": total_aplazados,
+        "total_futuros": total_futuros,
         "total_fuera_servicio": total_fuera_servicio,
         "porcentaje_cumplimiento": porcentaje_cumplimiento,
         "sedes_stats": [{
-            "sede": s[0], "al_dia": s[1], "en_mora": s[2], "fuera_servicio": s[3]
+            "sede": s[0], "al_dia": s[1], "en_mora": s[2], "futuros": s[3], "fuera_servicio": s[4]
         } for s in sedes_data]
     })
 
@@ -214,7 +220,6 @@ def cargar_excel():
                 header_row_index = idx
                 break
 
-        # Mapeo preciso de subcolumnas por mes
         meses_cols = {}
         curr_mes = None
         for col_idx in range(25, min(80, df_raw.shape[1])):
@@ -270,10 +275,11 @@ def cargar_excel():
             row_raw_idx = r_idx + header_row_index + 1
             ult_ok = "Ninguno"
             hubo_aplazamiento = "No"
-            tiene_pendiente = False
+            tiene_mora_pasada = False
+            tiene_programado_futuro = False
 
             if row_raw_idx < len(df_raw):
-                for m_nombre in MESES_ORDEN:
+                for m_idx, m_nombre in enumerate(MESES_ORDEN):
                     if m_nombre in meses_cols:
                         cols_m = meses_cols[m_nombre]
                         vals = [str(df_raw.iloc[row_raw_idx, c]).strip().upper() for c in cols_m if c < df_raw.shape[1] and pd.notna(df_raw.iloc[row_raw_idx, c])]
@@ -282,15 +288,21 @@ def cargar_excel():
                             ult_ok = m_nombre
                         if any(v in ['IF', 'R', 'REPROGRAMADO', 'APLAZADO'] for v in vals):
                             hubo_aplazamiento = "Sí"
+                        
                         if 'PG' in vals:
-                            tiene_pendiente = True
+                            if m_idx <= MES_ACTUAL_IDX:
+                                tiene_mora_pasada = True
+                            else:
+                                tiene_programado_futuro = True
 
-            if ult_ok != "Ninguno" and not tiene_pendiente:
-                cumplimiento = "Al Dia"
+            if tiene_mora_pasada:
+                cumplimiento = "En Mora"
             elif hubo_aplazamiento == "Sí":
                 cumplimiento = "Aplazado"
-            elif tiene_pendiente:
-                cumplimiento = "En Mora"
+            elif ult_ok != "Ninguno":
+                cumplimiento = "Al Dia"
+            elif tiene_programado_futuro:
+                cumplimiento = "Programado Futuro"
             else:
                 cumplimiento = "Al Dia"
 
