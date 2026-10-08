@@ -49,34 +49,46 @@ def index():
 
 @app.route('/datos-dashboard', methods=['GET'])
 def datos_dashboard():
-    """Retorna las estadísticas del Dashboard EXCLUYENDO 'NO APLICA' y 'BAJA'."""
+    """Retorna las estadísticas del Dashboard EXCLUYENDO 'NO APLICA' y 'BAJA', filtrables por Sede."""
+    filter_sede = request.args.get('sede', '').strip()
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')")
+    sql_where = " WHERE UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')"
+    params = []
+
+    if filter_sede:
+        sql_where += " AND UPPER(sede) = UPPER(?)"
+        params.append(filter_sede)
+
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where}", params)
     total_equipos_pmp = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'REALIZADO'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where} AND UPPER(cumplimiento_pmp) = 'REALIZADO'", params)
     total_realizado = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'NO REALIZADO'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'", params)
     total_no_realizado = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'A FUTURO'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params)
     total_a_futuro = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(estado) = 'FUERA DE SERVICIO' AND UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where} AND UPPER(estado) = 'FUERA DE SERVICIO'", params)
     total_fuera_servicio = cursor.fetchone()[0]
 
-    cursor.execute('''
+    # Agrupar por la columna de observaciones del final (Columna 84)
+    sql_razones = f'''
         SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Sin observación registrada') as razon, COUNT(*) 
         FROM equipos 
-        WHERE UPPER(cumplimiento_pmp) = 'NO REALIZADO'
+        {sql_where} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'
         GROUP BY razon
         ORDER BY COUNT(*) DESC
-    ''')
+    '''
+    cursor.execute(sql_razones, params)
     razones_no_realizado = [{"razon": row[0], "cantidad": row[1]} for row in cursor.fetchall()]
 
+    # Gráfico general de sedes
     cursor.execute('''
         SELECT sede, 
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'REALIZADO' THEN 1 ELSE 0 END) as realizado,
@@ -108,37 +120,46 @@ def datos_dashboard():
 
 @app.route('/generar-informe-ejecutivo', methods=['GET'])
 def generar_informe_ejecutivo():
-    """Genera el desglose justificativo completo entre el Inventario Total y el Plan PMP."""
+    """Genera la conciliación completa entre Inventario Total y Plan PMP, filtrable por Sede."""
+    filter_sede = request.args.get('sede', '').strip()
+    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM equipos")
+    sql_where_all = " WHERE 1=1"
+    params_all = []
+    if filter_sede:
+        sql_where_all += " AND UPPER(sede) = UPPER(?)"
+        params_all.append(filter_sede)
+
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where_all}", params_all)
     total_inventario = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'NO APLICA'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO APLICA'", params_all)
     total_no_aplica = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'BAJA'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where_all} AND UPPER(cumplimiento_pmp) = 'BAJA'", params_all)
     total_baja = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'REALIZADO'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where_all} AND UPPER(cumplimiento_pmp) = 'REALIZADO'", params_all)
     total_realizado = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'NO REALIZADO'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'", params_all)
     total_no_realizado = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'A FUTURO'")
+    cursor.execute(f"SELECT COUNT(*) FROM equipos {sql_where_all} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params_all)
     total_a_futuro = cursor.fetchone()[0]
 
     # Justificaciones de NO APLICA
-    cursor.execute('''
-        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Garantía extendida / Sin contrato N2 activo / Apoyo tecnológico') as razon, COUNT(*)
+    sql_razones_na = f'''
+        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Garantía extendida / Apoyo tecnológico / Sin contrato N2') as razon, COUNT(*)
         FROM equipos
-        WHERE UPPER(cumplimiento_pmp) = 'NO APLICA'
+        {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO APLICA'
         GROUP BY razon
         ORDER BY COUNT(*) DESC
         LIMIT 10
-    ''')
+    '''
+    cursor.execute(sql_razones_na, params_all)
     razones_no_aplica = [{"razon": r[0], "cantidad": r[1]} for r in cursor.fetchall()]
 
     conn.close()
@@ -146,6 +167,7 @@ def generar_informe_ejecutivo():
     total_pmp = total_realizado + total_no_realizado + total_a_futuro
 
     return jsonify({
+        "sede": filter_sede if filter_sede else "Todas las Sedes",
         "total_inventario": total_inventario,
         "total_pmp": total_pmp,
         "total_no_aplica": total_no_aplica,
@@ -212,6 +234,8 @@ def cargar_excel():
         agregados = 0
         omitidos = 0
 
+        col_obs_final = 84 if df_raw.shape[1] > 84 else (79 if df_raw.shape[1] > 79 else -1)
+
         for r_idx in range(4, len(df_raw)):
             nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else ""
             serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
@@ -226,8 +250,13 @@ def cargar_excel():
             ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
             frecuencia = str(df_raw.iloc[r_idx, 77]).strip() if pd.notna(df_raw.iloc[r_idx, 77]) else ""
             meses_prog = str(df_raw.iloc[r_idx, 78]).strip() if pd.notna(df_raw.iloc[r_idx, 78]) else ""
-            observacion = str(df_raw.iloc[r_idx, 79]).strip() if df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]) else ""
             
+            observacion = ""
+            if col_obs_final != -1 and pd.notna(df_raw.iloc[r_idx, col_obs_final]):
+                observacion = str(df_raw.iloc[r_idx, col_obs_final]).strip()
+            elif df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
+                observacion = str(df_raw.iloc[r_idx, 79]).strip()
+
             estado_final_raw = str(df_raw.iloc[r_idx, 82]).strip().upper() if df_raw.shape[1] > 82 and pd.notna(df_raw.iloc[r_idx, 82]) else "NO APLICA"
 
             if estado_final_raw in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
@@ -250,7 +279,7 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f"Base de datos actualizada. Registros procesados: {agregados}. Duplicados: {omitidos}."
+            "message": f"Base de datos actualizada correctamente. Registros procesados: {agregados}. Duplicados: {omitidos}."
         })
 
     except Exception as e:
@@ -321,7 +350,7 @@ def descargar_excel():
                serial AS SERIAL, numero_inventario AS "NO. INVENTARIO", 
                sede AS SEDE, ubicacion AS UBICACION,
                frecuencia_pmp AS "FRECUENCIA PMP", meses_programados AS "MESES PROGRAMADOS",
-               cumplimiento_pmp AS "ESTADO FINAL PMP", observacion AS "OBSERVACIONES / RAZON"
+               cumplimiento_pmp AS "ESTADO FINAL PMP", observacion AS "OBSERVACIONES FINAL (CAUSAL)"
         FROM equipos WHERE 1=1
     '''
     params = []
