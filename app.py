@@ -48,6 +48,57 @@ init_db()
 def index():
     return render_template('index.html')
 
+@app.route('/datos-dashboard', methods=['GET'])
+def datos_dashboard():
+    """Retorna las estadísticas e indicadores gerenciales para el Dashboard."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # Totales generales
+    cursor.execute("SELECT COUNT(*) FROM equipos")
+    total_equipos = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'AL DÍA'")
+    total_al_dia = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(cumplimiento_pmp) = 'EN MORA'")
+    total_en_mora = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(aplazado) = 'SÍ' OR UPPER(cumplimiento_pmp) = 'APLAZADO'")
+    total_aplazados = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM equipos WHERE UPPER(estado) = 'FUERA DE SERVICIO'")
+    total_fuera_servicio = cursor.fetchone()[0]
+
+    # Distribución por Sede y Cumplimiento
+    cursor.execute('''
+        SELECT sede, 
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'AL DÍA' THEN 1 ELSE 0 END) as al_dia,
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'EN MORA' THEN 1 ELSE 0 END) as en_mora,
+               SUM(CASE WHEN UPPER(estado) = 'FUERA DE SERVICIO' THEN 1 ELSE 0 END) as fuera_servicio
+        FROM equipos 
+        WHERE sede IS NOT NULL AND TRIM(sede) != ''
+        GROUP BY sede
+        ORDER BY en_mora DESC, total_equipos DESC
+    ''')
+    sedes_data = cursor.fetchall()
+
+    conn.close()
+
+    porcentaje_cumplimiento = round((total_al_dia / total_equipos * 100), 1) if total_equipos > 0 else 0
+
+    return jsonify({
+        "total_equipos": total_equipos,
+        "total_al_dia": total_al_dia,
+        "total_en_mora": total_en_mora,
+        "total_aplazados": total_aplazados,
+        "total_fuera_servicio": total_fuera_servicio,
+        "porcentaje_cumplimiento": porcentaje_cumplimiento,
+        "sedes_stats": [{
+            "sede": s[0], "al_dia": s[1], "en_mora": s[2], "fuera_servicio": s[3]
+        } for s in sedes_data]
+    })
+
 @app.route('/obtener-sedes', methods=['GET'])
 def obtener_sedes():
     conn = sqlite3.connect(DB_NAME)
@@ -73,10 +124,7 @@ def verificar_serial(serial):
         return jsonify({
             "existe": True,
             "equipo": {
-                "id": equipo[0],
-                "nombre": equipo[1],
-                "marca": equipo[2],
-                "modelo": equipo[3],
+                "id": equipo[0], "nombre": equipo[1], "marca": equipo[2], "modelo": equipo[3],
                 "numero_inventario": equipo[4] if equipo[4] else "",
                 "sede": equipo[5] if equipo[5] else "",
                 "ubicacion": equipo[6] if equipo[6] else "",
@@ -160,7 +208,6 @@ def cargar_excel():
         file_bytes = io.BytesIO(file.read())
         df_raw = pd.read_excel(file_bytes, header=None)
         
-        # Detectar fila de encabezados
         header_row_index = 3
         for idx in range(min(15, len(df_raw))):
             row_values = [str(val).strip().upper() for val in df_raw.iloc[idx].values if pd.notna(val)]
@@ -168,7 +215,6 @@ def cargar_excel():
                 header_row_index = idx
                 break
 
-        # Mapa de columnas por mes en el formato Excel
         meses_cols = {}
         curr_mes = None
         for col_idx in range(25, min(80, df_raw.shape[1])):
@@ -221,7 +267,6 @@ def cargar_excel():
             frecuencia = str(row[col_frec]).strip() if col_frec and pd.notna(row[col_frec]) else ""
             meses_prog = str(row[col_meses]).strip() if col_meses and pd.notna(row[col_meses]) else ""
 
-            # Auditoría de Mantenimiento Preventivo (PMP)
             row_raw_idx = r_idx + header_row_index + 1
             ult_ok = "Ninguno"
             hubo_aplazamiento = "No"
