@@ -4,13 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gestión e Indicadores PMP Biomédico</title>
-    <!-- Chart.js para renderizar los gráficos del Dashboard -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1250px; margin: 0 auto; }
         
-        /* Navegación por pestañas */
         .tabs { display: flex; border-bottom: 2px solid #cbd5e1; margin-bottom: 20px; }
         .tab-btn { padding: 12px 24px; font-size: 16px; font-weight: bold; color: #64748b; background: none; border: none; cursor: pointer; border-bottom: 3px solid transparent; width: auto; }
         .tab-btn.active { color: #1e3a8a; border-bottom: 3px solid #1e3a8a; background-color: #ffffff; border-radius: 8px 8px 0 0; }
@@ -44,15 +42,16 @@
         .badge-success { background-color: #dcfce7; color: #15803d; }
         .badge-danger { background-color: #fee2e2; color: #b91c1c; }
         .badge-warning { background-color: #fef3c7; color: #b45309; }
+        .badge-info { background-color: #e0f2fe; color: #0369a1; }
 
-        /* Estilos KPI Dashboard */
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
         .kpi-card { background: #f8fafc; border-left: 5px solid #2563eb; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .kpi-card.green { border-left-color: #059669; }
         .kpi-card.red { border-left-color: #dc2626; }
         .kpi-card.amber { border-left-color: #d97706; }
-        .kpi-value { font-size: 28px; font-weight: bold; margin-top: 5px; color: #0f172a; }
-        .kpi-title { font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+        .kpi-card.blue { border-left-color: #0284c7; }
+        .kpi-value { font-size: 26px; font-weight: bold; margin-top: 5px; color: #0f172a; }
+        .kpi-title { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; }
         
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
@@ -62,21 +61,19 @@
 
 <div class="container">
 
-    <!-- BARRA DE NAVEGACIÓN PRINCIPAL -->
     <div class="tabs">
         <button class="tab-btn active" onclick="cambiarPestana('pestana-inventario', this)">📋 Gestión e Inventario</button>
         <button class="tab-btn" onclick="cambiarPestana('pestana-dashboard', this)">📊 Dashboard Gerencial PMP</button>
     </div>
 
-    <!-- PESTAÑA 1: GESTIÓN DE INVENTARIO -->
+    <!-- PESTAÑA 1 -->
     <div id="pestana-inventario" class="tab-content active">
-        <!-- SECCIÓN CARGA MASIVA -->
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
                 <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
             </div>
-            <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube el Excel del cronograma. El sistema auditará la ejecución, aplazamientos y estado de cumplimiento.</p>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Sube el Excel del cronograma. El sistema auditará mantenimientos ejecutados, en mora, aplazados y programados a futuro.</p>
             
             <form id="excelForm" enctype="multipart/form-data">
                 <div class="form-group">
@@ -87,7 +84,6 @@
             <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
         </div>
 
-        <!-- SECCIÓN REGISTRO INDIVIDUAL -->
         <div class="card">
             <h2>🔍 Registro / Edición por Serial</h2>
             <div id="alertBox" class="alert"></div>
@@ -148,7 +144,6 @@
             </form>
         </div>
 
-        <!-- SECCIÓN TABLA Y CONSULTA -->
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">📊 Control de Inventario</h3>
@@ -166,9 +161,10 @@
                     <label style="font-size: 12px;">Estado Mantenimiento (PMP):</label>
                     <select id="filtroCumplimiento" onchange="buscarEquipos()">
                         <option value="">Todos los Estados PMP</option>
-                        <option value="Al Día">🟢 Cumple / Al Día</option>
-                        <option value="En Mora">🔴 En Mora / Pendiente</option>
+                        <option value="Al Dia">🟢 Cumple / Al Día</option>
+                        <option value="En Mora">🔴 En Mora (Atrasado)</option>
                         <option value="Aplazado">🟡 Aplazado / Reprogramado</option>
+                        <option value="Programado">🔵 Programado Futuro</option>
                     </select>
                 </div>
                 <div style="flex: 2;">
@@ -198,18 +194,17 @@
         </div>
     </div>
 
-    <!-- PESTAÑA 2: DASHBOARD GERENCIAL -->
+    <!-- PESTAÑA 2 -->
     <div id="pestana-dashboard" class="tab-content">
         <div class="card">
             <h2>📈 Tablero Gerencial de Indicadores PMP</h2>
             <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-                Resumen ejecutivo para comités de mantenimiento, seguimiento de disponibilidad operativa y cierre de brechas.
+                Resumen ejecutivo para comités de mantenimiento, seguimiento de disponibilidad operativa y proyección de carga de trabajo.
             </p>
 
-            <!-- TARJETAS DE INDICADORES CLAVE (KPIs) -->
             <div class="kpi-grid">
                 <div class="kpi-card green">
-                    <div class="kpi-title">% Cumplimiento General</div>
+                    <div class="kpi-title">% Cumplimiento Historico</div>
                     <div class="kpi-value" id="kpiPorcentaje">0%</div>
                 </div>
                 <div class="kpi-card">
@@ -224,20 +219,23 @@
                     <div class="kpi-title">Mantenimientos Aplazados</div>
                     <div class="kpi-value" id="kpiAplazados">0</div>
                 </div>
+                <div class="kpi-card blue">
+                    <div class="kpi-title">Programados Futuro</div>
+                    <div class="kpi-value" id="kpiFuturos">0</div>
+                </div>
                 <div class="kpi-card red">
                     <div class="kpi-title">Fuera de Servicio</div>
                     <div class="kpi-value" id="kpiFueraServicio">0</div>
                 </div>
             </div>
 
-            <!-- GRÁFICOS INTERACTIVOS -->
             <div class="charts-grid">
                 <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
-                    <h3>Distribución de Cumplimiento PMP</h3>
+                    <h3>Distribución General PMP</h3>
                     <canvas id="chartDonaCumplimiento" style="max-height: 280px;"></canvas>
                 </div>
                 <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
-                    <h3>Equipos En Mora / Pendientes por Sede</h3>
+                    <h3>Estado por Sede (Mora vs Futuros vs Al Día)</h3>
                     <canvas id="chartBarrasSedes" style="max-height: 280px;"></canvas>
                 </div>
             </div>
@@ -266,32 +264,31 @@
         const res = await fetch('/datos-dashboard');
         const data = await res.json();
 
-        // Actualizar tarjetas de KPI
         document.getElementById('kpiPorcentaje').innerText = data.porcentaje_cumplimiento + '%';
         document.getElementById('kpiTotal').innerText = data.total_equipos;
         document.getElementById('kpiEnMora').innerText = data.total_en_mora;
         document.getElementById('kpiAplazados').innerText = data.total_aplazados;
+        document.getElementById('kpiFuturos').innerText = data.total_futuros;
         document.getElementById('kpiFueraServicio').innerText = data.total_fuera_servicio;
 
-        // Renderizar Gráfico de Dona (Cumplimiento)
         const ctxDona = document.getElementById('chartDonaCumplimiento').getContext('2d');
         if (chartDona) chartDona.destroy();
         chartDona = new Chart(ctxDona, {
             type: 'doughnut',
             data: {
-                labels: ['Al Día (Cumple)', 'En Mora (Pendiente)', 'Aplazados'],
+                labels: ['Al Día (Ejecutados)', 'En Mora (Atrasados)', 'Aplazados', 'Programados Futuro'],
                 datasets: [{
-                    data: [data.total_al_dia, data.total_en_mora, data.total_aplazados],
-                    backgroundColor: ['#059669', '#dc2626', '#d97706']
+                    data: [data.total_al_dia, data.total_en_mora, data.total_aplazados, data.total_futuros],
+                    backgroundColor: ['#059669', '#dc2626', '#d97706', '#0284c7']
                 }]
             },
             options: { responsive: true, maintainAspectRatio: false }
         });
 
-        // Renderizar Gráfico de Barras por Sede
         const labelsSedes = data.sedes_stats.map(s => s.sede);
         const dataEnMora = data.sedes_stats.map(s => s.en_mora);
         const dataAlDia = data.sedes_stats.map(s => s.al_dia);
+        const dataFuturos = data.sedes_stats.map(s => s.futuros);
 
         const ctxBarras = document.getElementById('chartBarrasSedes').getContext('2d');
         if (chartBarras) chartBarras.destroy();
@@ -301,7 +298,8 @@
                 labels: labelsSedes,
                 datasets: [
                     { label: 'En Mora', data: dataEnMora, backgroundColor: '#dc2626' },
-                    { label: 'Al Día', data: dataAlDia, backgroundColor: '#059669' }
+                    { label: 'Al Día', data: dataAlDia, backgroundColor: '#059669' },
+                    { label: 'Programado Futuro', data: dataFuturos, backgroundColor: '#0284c7' }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
@@ -511,6 +509,7 @@
             let badgeClass = 'badge-success';
             if (eq.cumplimiento_pmp === 'En Mora') badgeClass = 'badge-danger';
             if (eq.cumplimiento_pmp === 'Aplazado') badgeClass = 'badge-warning';
+            if (eq.cumplimiento_pmp === 'Programado Futuro') badgeClass = 'badge-info';
 
             return `
                 <tr>
