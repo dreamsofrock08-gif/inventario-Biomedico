@@ -55,50 +55,64 @@ def cargar_excel():
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
-        # Limpiar base previa para reflejar exactamente la nueva carga
         cursor.execute("DELETE FROM equipos_pmp")
-
         agregados = 0
 
         for r_idx in range(4, len(df_raw)):
-            nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else ""
+            nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else "EQUIPO SIN NOMBRE"
+            num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else "SIN INVENTARIO"
             serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
 
-            if not nombre or not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
-                serial = f"INV-{r_idx}-{str(df_raw.iloc[r_idx, 4]).strip()}"
+            if not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
+                serial = f"INV-{r_idx}-{num_inv}"
 
             marca = str(df_raw.iloc[r_idx, 1]).strip() if pd.notna(df_raw.iloc[r_idx, 1]) else ""
             modelo = str(df_raw.iloc[r_idx, 2]).strip() if pd.notna(df_raw.iloc[r_idx, 2]) else ""
-            num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else ""
             sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
             ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
             
-            frecuencia = ""
+            frecuencia = "NO ESPECIFICADA"
             if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
-                frecuencia = str(df_raw.iloc[r_idx, 77]).strip()
+                val_frec = str(df_raw.iloc[r_idx, 77]).strip().upper()
+                if val_frec and val_frec not in ['NAN', 'NONE']:
+                    frecuencia = val_frec
 
             meses_prog = ""
             if df_raw.shape[1] > 78 and pd.notna(df_raw.iloc[r_idx, 78]):
                 meses_prog = str(df_raw.iloc[r_idx, 78]).strip()
 
-            # Búsqueda dinámica del estado final (REALIZADO, NO REALIZADO, A FUTURO, NO APLICA, BAJA)
+            # Búsqueda dinámica de estado
             cumplimiento = "NO APLICA"
-            for col_search in range(df_raw.shape[1] - 1, 70, -1):
-                val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
-                if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
-                    cumplimiento = val_cell
-                    break
-
-            # Observación final (Revisar últimas columnas)
-            observacion = ""
-            for col_obs in [84, 83, 79]:
-                if df_raw.shape[1] > col_obs and pd.notna(df_raw.iloc[r_idx, col_obs]):
-                    val_obs = str(df_raw.iloc[r_idx, col_obs]).strip()
-                    if val_obs.upper() not in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'NAN', 'NONE']:
-                        observacion = val_obs
+            for col_search in [82, 83, 81, 80]:
+                if df_raw.shape[1] > col_search and pd.notna(df_raw.iloc[r_idx, col_search]):
+                    val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper()
+                    if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
+                        cumplimiento = val_cell
                         break
 
-            # Banderas personalizadas
+            # Observación con relleno inteligente según estado
+            observacion_raw = ""
+            for col_obs in [84, 83, 79]:
+                if df_raw.shape[1] > col_obs and pd.notna(df_raw.iloc[r_idx, col_obs]):
+                    val_o = str(df_raw.iloc[r_idx, col_obs]).strip()
+                    if val_o.upper() not in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'NAN', 'NONE']:
+                        observacion_raw = val_o
+                        break
+
+            if observacion_raw:
+                observacion = observacion_raw
+            else:
+                if cumplimiento == 'REALIZADO':
+                    observacion = "MANTENIMIENTO EJECUTADO"
+                elif cumplimiento == 'A FUTURO':
+                    observacion = "PROGRAMADO EN CRONOGRAMA"
+                elif cumplimiento == 'NO REALIZADO':
+                    observacion = "PENDIENTE DE UBICACIÓN / GESTIÓN"
+                elif cumplimiento == 'NO APLICA':
+                    observacion = "EXCLUIDO POR MODALIDAD DE CONTRATO O APOYO"
+                else:
+                    observacion = "EQUIPO DADO DE BAJA"
+
             no_ubicado = "SI" if "NO UBICADO" in observacion.upper() else "NO"
             a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
             checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
@@ -120,7 +134,7 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f"Base de datos del Dashboard procesada con éxito. Registros importados: {agregados}."
+            "message": f"Base de datos procesada con éxito. Total registros importados: {agregados}."
         })
 
     except Exception as e:
@@ -264,12 +278,12 @@ def descargar_excel_dashboard():
     sql = '''
         SELECT 
             serial AS "SERIAL",
-            numero_inventario AS "NUMERO DE INVENTARIO",
+            COALESCE(NULLIF(numero_inventario, ''), 'SIN INVENTARIO') AS "NUMERO DE INVENTARIO",
             nombre AS "NOMBRE DEL EQUIPO",
             sede AS "SEDE",
-            frecuencia_pmp AS "FRECUENCIA",
+            COALESCE(NULLIF(frecuencia_pmp, ''), 'NO ESPECIFICADA') AS "FRECUENCIA",
             cumplimiento_pmp AS "ESTADO",
-            observacion AS "CAUSA / OBSERVACION",
+            COALESCE(NULLIF(observacion, ''), 'MANTENIMIENTO AL DÍA') AS "CAUSA / OBSERVACION",
             envio_correo AS "ENVIO CORREO / CHECKING",
             equipo_no_ubicado AS "EQUIPO NO UBICADO",
             programado_resto_ano AS "PROGRAMADO RESTO DEL AÑO"
