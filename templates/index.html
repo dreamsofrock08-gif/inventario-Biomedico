@@ -3,47 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Control y Dashboard PMP Biomédico</title>
+    <title>Dashboard Gerencial PMP Biomédico</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; color: #1e293b; }
         .container { max-width: 1250px; margin: 0 auto; }
         
-        .tabs { display: flex; border-bottom: 2px solid #cbd5e1; margin-bottom: 20px; }
-        .tab-btn { padding: 12px 24px; font-size: 16px; font-weight: bold; color: #64748b; background: none; border: none; cursor: pointer; border-bottom: 3px solid transparent; width: auto; }
-        .tab-btn.active { color: #1e3a8a; border-bottom: 3px solid #1e3a8a; background-color: #ffffff; border-radius: 8px 8px 0 0; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 15px; margin-bottom: 20px; }
+        .header h1 { font-size: 22px; color: #1e3a8a; margin: 0; }
+        .header p { font-size: 13px; color: #64748b; margin: 4px 0 0 0; }
 
-        .card { background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card { background: white; padding: 22px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
         h2, h3 { color: #1e3a8a; margin-top: 0; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         
-        .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; display: none; }
-        .alert-info { background-color: #e0f2fe; color: #075985; border: 1px solid #38bdf8; }
-        .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #4ade80; }
+        .btn { background-color: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 4px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px; }
+        .btn-excel { background-color: #059669; }
+        .btn-informe { background-color: #7c3aed; }
+        .btn:hover { opacity: 0.9; }
+
+        .alert { padding: 12px; border-radius: 4px; margin-top: 15px; display: none; font-size: 14px; }
+        .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
         .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
 
-        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .btn-excel { background-color: #059669; width: 100%; }
-        .btn-danger { background-color: #dc2626; width: auto; font-size: 14px; padding: 8px 15px; }
-        .btn-descargar { background-color: #0284c7; width: auto; display: inline-block; padding: 10px 20px; text-decoration: none; color: white; border-radius: 4px; font-weight: bold; }
-        .btn-informe { background-color: #7c3aed; padding: 10px 20px; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-        th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
-        th { background-color: #f3f4f6; color: #1f2937; }
-        tr:nth-child(even) { background-color: #f9fafb; }
-        
-        .badge { padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 11px; display: inline-block; }
-        .badge-realizado { background-color: #dcfce7; color: #15803d; }
-        .badge-no-realizado { background-color: #fee2e2; color: #b91c1c; }
-        .badge-futuro { background-color: #e0f2fe; color: #0369a1; }
-        .badge-no-aplica { background-color: #f1f5f9; color: #64748b; }
-
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .kpi-card { background: #f8fafc; border-left: 5px solid #2563eb; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .kpi-card.green { border-left-color: #059669; }
         .kpi-card.red { border-left-color: #dc2626; }
@@ -54,11 +36,16 @@
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
 
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { border: 1px solid #e5e7eb; padding: 10px 12px; text-align: left; }
+        th { background-color: #f3f4f6; color: #1f2937; }
+        tr:nth-child(even) { background-color: #f9fafb; }
+
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); }
-        .modal-content { background-color: #fefefe; margin: 3% auto; padding: 30px; border: 1px solid #888; width: 80%; max-width: 900px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-content { background-color: #ffffff; margin: 3% auto; padding: 30px; border: 1px solid #cbd5e1; width: 80%; max-width: 900px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); color: #0f172a; }
         .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         .close:hover { color: black; }
-        
+
         @media print {
             body * { visibility: hidden; }
             #modalInformeContent, #modalInformeContent * { visibility: visible; }
@@ -71,163 +58,108 @@
 
 <div class="container">
 
-    <div class="tabs">
-        <button class="tab-btn active" onclick="cambiarPestana('pestana-inventario', this)">📋 Inventario General y Carga</button>
-        <button class="tab-btn" onclick="cambiarPestana('pestana-dashboard', this)">📊 Dashboard Gerencial PMP</button>
+    <div class="header">
+        <div>
+            <h1>📊 DASHBOARD GERENCIAL PMP BIOMÉDICO</h1>
+            <p>Monitoreo de Cobertura, Avance de Mantenimientos y Diagnóstico Causal por Sede</p>
+        </div>
+        <button onclick="abrirModalInforme()" class="btn btn-informe">📄 Generar Informe Ejecutivo de Exclusiones</button>
     </div>
 
-    <!-- PESTAÑA 1 -->
-    <div id="pestana-inventario" class="tab-content active">
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0;">📁 Cargar Base de Datos desde Excel</h3>
-                <button type="button" class="btn-danger" onclick="limpiarBaseDatos()">🗑️ Vaciar BD Actual</button>
-            </div>
-            <p style="font-size: 13px; color: #6b7280; margin-top: 5px;">Carga la base de datos oficial. Las observaciones de causales finales (Columna 84) se asociarán a cada registro no realizado.</p>
-            
-            <form id="excelForm" enctype="multipart/form-data">
-                <div class="form-group">
-                    <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
-                </div>
-                <button type="submit" class="btn-excel" id="btnSubirExcel">Procesar Archivo Excel</button>
-            </form>
-            <div id="resultadoExcel" class="alert alert-info" style="margin-top: 15px;"></div>
+    <!-- CARGA DE ARCHIVO -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">📁 Cargar Base de Datos Oficial (Excel)</h3>
+            <a href="#" onclick="descargarExcelDashboard()" class="btn btn-excel">📥 Descargar Reporte Excel Completo</a>
         </div>
+        <p style="font-size: 13px; color: #64748b; margin-top: 6px;">
+            Sube el archivo Excel oficial. El sistema procesará el Dashboard y habilitará la descarga con las 10 columnas personalizadas.
+        </p>
+        
+        <form id="excelForm" enctype="multipart/form-data" style="margin-top: 15px;">
+            <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="submit" class="btn" id="btnSubirExcel" style="margin-left: 10px;">Procesar Archivo</button>
+        </form>
+        <div id="resultadoExcel" class="alert"></div>
+    </div>
 
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">📊 Base de Datos General de Equipos</h3>
-                <a href="#" onclick="descargarExcelConFiltro()" class="btn-descargar">📥 Descargar Reporte Filtrado</a>
-            </div>
+    <!-- FILTRO SEDE -->
+    <div class="card" style="display: flex; align-items: center; gap: 15px; padding: 15px;">
+        <label style="font-weight: bold; color: #1e3a8a; min-width: 160px;">🏢 Filtrar por Sede:</label>
+        <select id="filtroSedeDashboard" onchange="cargarDatosDashboard()" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; max-width: 400px; font-size: 14px;">
+            <option value="">Todas las Sedes (General)</option>
+        </select>
+    </div>
 
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <div style="flex: 1;">
-                    <label style="font-size: 12px;">Sede:</label>
-                    <select id="filtroSedeTabla" onchange="buscarEquipos()">
-                        <option value="">Todas las Sedes</option>
-                    </select>
-                </div>
-                <div style="flex: 1;">
-                    <label style="font-size: 12px;">Estado Mantenimiento PMP:</label>
-                    <select id="filtroCumplimiento" onchange="buscarEquipos()">
-                        <option value="">Todos los Estados</option>
-                        <option value="REALIZADO">🟢 REALIZADO</option>
-                        <option value="NO REALIZADO">🔴 NO REALIZADO (Pendiente)</option>
-                        <option value="A FUTURO">🔵 A FUTURO</option>
-                        <option value="NO APLICA">⚪ NO APLICA</option>
-                    </select>
-                </div>
-                <div style="flex: 2;">
-                    <label style="font-size: 12px;">Búsqueda por texto:</label>
-                    <input type="text" id="inputBuscar" placeholder="🔍 Serial, No. Inv, nombre equipo..." onkeyup="buscarEquipos()">
-                </div>
-            </div>
-
-            <div style="max-height: 480px; overflow-y: auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Serial</th>
-                            <th>No. Inv</th>
-                            <th>Nombre del Equipo</th>
-                            <th>Sede / Ubicación</th>
-                            <th>Frecuencia</th>
-                            <th>Estado PMP</th>
-                            <th>Causal / Observación Final</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tablaEquipos">
-                        <tr><td colspan="7">Cargando registros...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+    <!-- TARJETAS KPI -->
+    <div class="kpi-grid">
+        <div class="kpi-card green">
+            <div class="kpi-title">% Cumplimiento PMP</div>
+            <div class="kpi-value" id="kpiPorcentaje">0%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Equipos Sujetos a PMP</div>
+            <div class="kpi-value" id="kpiTotalPmp">0</div>
+        </div>
+        <div class="kpi-card green">
+            <div class="kpi-title">Mantenimientos Realizados</div>
+            <div class="kpi-value" id="kpiRealizados">0</div>
+        </div>
+        <div class="kpi-card red">
+            <div class="kpi-title">No Realizados (Backlog)</div>
+            <div class="kpi-value" id="kpiNoRealizados">0</div>
+        </div>
+        <div class="kpi-card blue">
+            <div class="kpi-title">Programados Resto del Año</div>
+            <div class="kpi-value" id="kpiAFuturo">0</div>
         </div>
     </div>
 
-    <!-- PESTAÑA 2 -->
-    <div id="pestana-dashboard" class="tab-content">
+    <!-- GRAFICOS -->
+    <div class="charts-grid">
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>📈 Tablero Gerencial de Indicadores PMP</h2>
-                <button onclick="abrirModalInforme()" class="btn-informe">📄 Generar Informe Ejecutivo de Exclusiones</button>
-            </div>
-
-            <!-- FILTRO POR SEDE EN DASHBOARD -->
-            <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-                <label style="margin: 0; font-weight: bold; min-width: 140px;">🏢 Filtrar por Sede:</label>
-                <select id="filtroSedeDashboard" onchange="cargarDatosDashboard()" style="max-width: 400px; margin: 0;">
-                    <option value="">Todas las Sedes (General)</option>
-                </select>
-            </div>
-
-            <div class="kpi-grid">
-                <div class="kpi-card green">
-                    <div class="kpi-title">% Cumplimiento PMP</div>
-                    <div class="kpi-value" id="kpiPorcentaje">0%</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-title">Equipos Sujetos a PMP</div>
-                    <div class="kpi-value" id="kpiTotalPmp">0</div>
-                </div>
-                <div class="kpi-card green">
-                    <div class="kpi-title">Mantenimientos Realizados</div>
-                    <div class="kpi-value" id="kpiRealizados">0</div>
-                </div>
-                <div class="kpi-card red">
-                    <div class="kpi-title">No Realizados (Pendientes)</div>
-                    <div class="kpi-value" id="kpiNoRealizados">0</div>
-                </div>
-                <div class="kpi-card blue">
-                    <div class="kpi-title">Programados A Futuro</div>
-                    <div class="kpi-value" id="kpiAFuturo">0</div>
-                </div>
-            </div>
-
-            <div class="charts-grid">
-                <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
-                    <h3>Distribución de Cumplimiento PMP</h3>
-                    <canvas id="chartDonaCumplimiento" style="max-height: 280px;"></canvas>
-                </div>
-                <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
-                    <h3>Comparativo General por Sedes</h3>
-                    <canvas id="chartBarrasSedes" style="max-height: 280px;"></canvas>
-                </div>
-            </div>
-
-            <div style="margin-top: 25px;">
-                <h3>📋 Causales de Incumplimiento ('NO REALIZADO')</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Causal / Observación Registrada</th>
-                            <th style="width: 150px; text-align: center;">Cantidad Equipos</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tablaRazones">
-                        <tr><td colspan="2">Cargando razones...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+            <h3 style="font-size: 15px; color: #1e3a8a;">Distribución de Estado PMP</h3>
+            <canvas id="chartDonaCumplimiento" style="max-height: 260px;"></canvas>
         </div>
+        <div class="card">
+            <h3 style="font-size: 15px; color: #1e3a8a;">Comparativo por Sedes (Realizados vs Pendientes)</h3>
+            <canvas id="chartBarrasSedes" style="max-height: 260px;"></canvas>
+        </div>
+    </div>
+
+    <!-- CAUSALES -->
+    <div class="card">
+        <h3>📋 Diagnóstico de Causales de Incumplimiento ('NO REALIZADO')</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Causal / Observación Registrada</th>
+                    <th style="width: 180px; text-align: center;">Cantidad Equipos</th>
+                </tr>
+            </thead>
+            <tbody id="tablaRazones">
+                <tr><td colspan="2">Cargando razones...</td></tr>
+            </tbody>
+        </table>
     </div>
 
 </div>
 
-<!-- VENTANA MODAL -->
+<!-- VENTANA MODAL PARA INFORME EJECUTIVO -->
 <div id="modalInforme" class="modal">
     <div class="modal-content" id="modalInformeContent">
         <span class="close no-print" onclick="cerrarModalInforme()">&times;</span>
         
         <div style="text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 20px;">
-            <h2 style="color: #1e3a8a; margin: 0;">INFORME EJECUTIVO DE DEPURACIÓN Y AUDITORÍA PMP</h2>
-            <p style="font-size: 13px; color: #64748b; margin: 5px 0 0 0;">Ingeniería Clínica - Justificación de Cobertura del Plan de Mantenimiento Preventivo</p>
+            <h2 style="color: #1e3a8a; margin: 0;">INFORME EJECUTIVO DE AUDITORÍA Y DEPURACIÓN PMP</h2>
+            <p style="font-size: 13px; color: #64748b; margin: 5px 0 0 0;">Ingeniería Clínica — Justificación de Cobertura y Exclusiones del Plan de Mantenimiento</p>
         </div>
 
         <div id="cuerpoInforme">Cargando datos del informe...</div>
 
         <div class="no-print" style="margin-top: 25px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 15px;">
-            <button onclick="window.print()" style="background-color: #059669; width: auto;">🖨️ Imprimir / Guardar en PDF</button>
-            <button onclick="cerrarModalInforme()" style="background-color: #64748b; width: auto; margin-left: 10px;">Cerrar</button>
+            <button onclick="window.print()" class="btn btn-excel">🖨️ Imprimir / Guardar PDF</button>
+            <button onclick="cerrarModalInforme()" class="btn" style="background-color: #64748b; margin-left: 10px;">Cerrar</button>
         </div>
     </div>
 </div>
@@ -236,21 +168,17 @@
     let chartDona = null;
     let chartBarras = null;
 
-    function cambiarPestana(idPestana, btn) {
-        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(tb => tb.classList.remove('active'));
-        
-        document.getElementById(idPestana).classList.add('active');
-        btn.classList.add('active');
-
-        if (idPestana === 'pestana-dashboard') {
-            cargarDatosDashboard();
-        }
+    async function cargarListaSedes() {
+        const res = await fetch('/obtener-sedes');
+        const sedes = await res.json();
+        const select = document.getElementById('filtroSedeDashboard');
+        select.innerHTML = '<option value="">Todas las Sedes (General)</option>';
+        sedes.forEach(s => { select.innerHTML += `<option value="${s}">${s}</option>`; });
     }
 
     async function cargarDatosDashboard() {
-        const sedeSeleccionada = document.getElementById('filtroSedeDashboard').value;
-        const res = await fetch(`/datos-dashboard?sede=${encodeURIComponent(sedeSeleccionada)}`);
+        const sede = document.getElementById('filtroSedeDashboard').value;
+        const res = await fetch(`/datos-dashboard?sede=${encodeURIComponent(sede)}`);
         const data = await res.json();
 
         document.getElementById('kpiPorcentaje').innerText = data.porcentaje_cumplimiento + '%';
@@ -264,7 +192,7 @@
         chartDona = new Chart(ctxDona, {
             type: 'doughnut',
             data: {
-                labels: ['Realizado', 'No Realizado (Pendiente)', 'A Futuro'],
+                labels: ['Realizado', 'No Realizado (Backlog)', 'Programado Resto del Año'],
                 datasets: [{
                     data: [data.total_realizado, data.total_no_realizado, data.total_a_futuro],
                     backgroundColor: ['#059669', '#dc2626', '#0284c7']
@@ -287,15 +215,18 @@
                 datasets: [
                     { label: 'Realizado', data: dataRealizado, backgroundColor: '#059669' },
                     { label: 'No Realizado', data: dataNoRealizado, backgroundColor: '#dc2626' },
-                    { label: 'A Futuro', data: dataAFuturo, backgroundColor: '#0284c7' }
+                    { label: 'Programado Futuro', data: dataAFuturo, backgroundColor: '#0284c7' }
                 ]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+            options: { 
+                responsive: true, maintainAspectRatio: false, 
+                scales: { x: { stacked: true }, y: { stacked: true } }
+            }
         });
 
         const tbodyRazones = document.getElementById('tablaRazones');
         if (data.razones_no_realizado.length === 0) {
-            tbodyRazones.innerHTML = '<tr><td colspan="2" style="text-align:center;">No hay equipos no realizados en esta sede.</td></tr>';
+            tbodyRazones.innerHTML = '<tr><td colspan="2" style="text-align:center;">No hay mantenimientos pendientes en esta sede.</td></tr>';
         } else {
             tbodyRazones.innerHTML = data.razones_no_realizado.map(r => `
                 <tr>
@@ -308,15 +239,15 @@
 
     async function abrirModalInforme() {
         document.getElementById('modalInforme').style.display = 'block';
-        const sedeSeleccionada = document.getElementById('filtroSedeDashboard').value;
-        const res = await fetch(`/generar-informe-ejecutivo?sede=${encodeURIComponent(sedeSeleccionada)}`);
+        const sede = document.getElementById('filtroSedeDashboard').value;
+        const res = await fetch(`/generar-informe-ejecutivo?sede=${encodeURIComponent(sede)}`);
         const data = await res.json();
 
         let html = `
             <div style="background-color: #f8fafc; border-left: 4px solid #1e3a8a; padding: 15px; margin-bottom: 20px;">
-                <h4 style="margin: 0 0 10px 0; color: #1e3a8a;">1. Resumen de Conciliación - ${data.sede}</h4>
-                <p style="font-size: 14px; line-height: 1.5; margin: 0;">
-                    El inventario en <strong>${data.sede}</strong> registra un total de <strong>${data.total_inventario} equipos</strong>. Se excluyen <strong>${data.total_no_aplica + data.total_baja} equipos</strong> por no ser sujeto de PMP, dejando un universo evaluado de <strong>${data.total_pmp} equipos</strong>.
+                <h4 style="margin: 0 0 10px 0; color: #1e3a8a;">1. Conciliación de Cobertura de Inventario — ${data.sede}</h4>
+                <p style="font-size: 14px; line-height: 1.5; margin: 0; color: #334155;">
+                    El inventario registrado cuenta con un total de <strong>${data.total_inventario} equipos</strong>. Se excluyen <strong>${data.total_no_aplica + data.total_baja} equipos</strong> por no ser sujetos a PMP (garantías, comodatos, apoyos tecnológicos), dejando un universo evaluado exigible de <strong>${data.total_pmp} equipos</strong>.
                 </p>
             </div>
 
@@ -331,33 +262,33 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>Universo Total Registrado</strong></td>
+                        <td><strong>Universo Total Inventario</strong></td>
                         <td style="text-align: center; font-weight: bold;">${data.total_inventario}</td>
                         <td style="text-align: center;">100.0%</td>
-                        <td>Base General Sede</td>
+                        <td>Base General Completa</td>
                     </tr>
                     <tr style="background-color: #fef2f2;">
                         <td>(-) Equipos 'NO APLICA'</td>
                         <td style="text-align: center; font-weight: bold; color: #dc2626;">${data.total_no_aplica}</td>
                         <td style="text-align: center;">${data.total_inventario > 0 ? ((data.total_no_aplica / data.total_inventario) * 100).toFixed(1) : 0}%</td>
-                        <td><span class="badge badge-no-aplica">Excluido de PMP</span></td>
+                        <td>Excluido de PMP Exigible</td>
                     </tr>
                     <tr style="background-color: #fef2f2;">
-                        <td>(-) Equipos 'BAJA'</td>
+                        <td>(-) Equipos Dados de 'BAJA'</td>
                         <td style="text-align: center; font-weight: bold; color: #dc2626;">${data.total_baja}</td>
                         <td style="text-align: center;">${data.total_inventario > 0 ? ((data.total_baja / data.total_inventario) * 100).toFixed(1) : 0}%</td>
-                        <td><span class="badge badge-no-aplica">Excluido de PMP</span></td>
+                        <td>Excluido por Obsolescencia</td>
                     </tr>
                     <tr style="background-color: #f0fdf4;">
-                        <td><strong>(=) Universo Evaluado PMP</strong></td>
+                        <td><strong>(=) Universo Evaluado en PMP</strong></td>
                         <td style="text-align: center; font-weight: bold; color: #15803d;">${data.total_pmp}</td>
                         <td style="text-align: center; font-weight: bold;">${data.total_inventario > 0 ? ((data.total_pmp / data.total_inventario) * 100).toFixed(1) : 0}%</td>
-                        <td><span class="badge badge-realizado">Base Dashboard</span></td>
+                        <td>Base Cálculo Dashboard</td>
                     </tr>
                 </tbody>
             </table>
 
-            <h4 style="color: #1e3a8a; margin-bottom: 10px;">2. Justificación Técnica de Equipos 'NO APLICA'</h4>
+            <h4 style="color: #1e3a8a; margin-bottom: 10px;">2. Causales de Exclusión ('NO APLICA')</h4>
             <table style="margin-bottom: 25px;">
                 <thead>
                     <tr>
@@ -375,23 +306,9 @@
                 </tbody>
             </table>
 
-            <h4 style="color: #1e3a8a; margin-bottom: 10px;">3. Cumplimiento del Plan PMP Evaluado</h4>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <div style="flex:1; background:#dcfce7; padding:10px; border-radius:4px; text-align:center;">
-                    <span style="font-size:11px; font-weight:bold; color:#15803d;">REALIZADOS</span><br>
-                    <strong style="font-size:18px; color:#15803d;">${data.total_realizado}</strong>
-                </div>
-                <div style="flex:1; background:#e0f2fe; padding:10px; border-radius:4px; text-align:center;">
-                    <span style="font-size:11px; font-weight:bold; color:#0369a1;">A FUTURO</span><br>
-                    <strong style="font-size:18px; color:#0369a1;">${data.total_a_futuro}</strong>
-                </div>
-                <div style="flex:1; background:#fee2e2; padding:10px; border-radius:4px; text-align:center;">
-                    <span style="font-size:11px; font-weight:bold; color:#b91c1c;">NO REALIZADOS</span><br>
-                    <strong style="font-size:18px; color:#b91c1c;">${data.total_no_realizado}</strong>
-                </div>
-            </div>
-            <p style="font-size: 13px; color: #475569;">
-                Porcentaje de cumplimiento en <strong>${data.sede}</strong>: <strong>${data.porcentaje_cumplimiento}%</strong>.
+            <h4 style="color: #1e3a8a; margin-bottom: 10px;">3. Cumplimiento del Plan Evaluado</h4>
+            <p style="font-size: 14px; color: #334155;">
+                Porcentaje de cumplimiento actual: <strong>${data.porcentaje_cumplimiento}%</strong> (${data.total_realizado} realizados, ${data.total_no_realizado} pendientes, ${data.total_a_futuro} programados para el resto del año).
             </p>
         `;
 
@@ -400,22 +317,6 @@
 
     function cerrarModalInforme() {
         document.getElementById('modalInforme').style.display = 'none';
-    }
-
-    async function cargarListaSedes() {
-        const res = await fetch('/obtener-sedes');
-        const sedes = await res.json();
-        
-        const selectSedeFiltroTabla = document.getElementById('filtroSedeTabla');
-        const selectSedeFiltroDash = document.getElementById('filtroSedeDashboard');
-
-        selectSedeFiltroTabla.innerHTML = '<option value="">Todas las Sedes</option>';
-        selectSedeFiltroDash.innerHTML = '<option value="">Todas las Sedes (General)</option>';
-
-        sedes.forEach(s => { 
-            selectSedeFiltroTabla.innerHTML += `<option value="${s}">${s}</option>`; 
-            selectSedeFiltroDash.innerHTML += `<option value="${s}">${s}</option>`; 
-        });
     }
 
     document.getElementById('excelForm').addEventListener('submit', async (e) => {
@@ -430,7 +331,7 @@
         formData.append('archivo_excel', fileInput.files[0]);
 
         btnSubir.disabled = true;
-        btnSubir.innerText = 'Procesando archivo...';
+        btnSubir.innerText = 'Procesando...';
         resultadoDiv.style.display = 'block';
 
         try {
@@ -441,7 +342,7 @@
                 resultadoDiv.innerText = data.message;
                 document.getElementById('excelForm').reset();
                 await cargarListaSedes();
-                cargarEquipos();
+                cargarDatosDashboard();
             } else {
                 resultadoDiv.className = 'alert alert-danger';
                 resultadoDiv.innerText = 'Error: ' + data.message;
@@ -451,68 +352,16 @@
             resultadoDiv.innerText = 'Error de conexión con el servidor.';
         } finally {
             btnSubir.disabled = false;
-            btnSubir.innerText = 'Procesar Archivo Excel';
+            btnSubir.innerText = 'Procesar Archivo';
         }
     });
 
-    async function limpiarBaseDatos() {
-        if (!confirm("⚠️ ¿Deseas vaciar la base de datos actual?")) return;
-        const res = await fetch('/limpiar-bd', { method: 'POST' });
-        const data = await res.json();
-        if (res.ok) {
-            alert("🧹 Base de datos reiniciada.");
-            await cargarListaSedes();
-            cargarEquipos();
-        }
+    function descargarExcelDashboard() {
+        const sede = document.getElementById('filtroSedeDashboard').value;
+        window.location.href = `/descargar-excel-dashboard?sede=${encodeURIComponent(sede)}`;
     }
 
-    async function cargarEquipos() {
-        const query = document.getElementById('inputBuscar').value;
-        const sede = document.getElementById('filtroSedeTabla').value;
-        const cumplimiento = document.getElementById('filtroCumplimiento').value;
-
-        const res = await fetch(`/listar-equipos?q=${encodeURIComponent(query)}&sede=${encodeURIComponent(sede)}&cumplimiento=${encodeURIComponent(cumplimiento)}`);
-        const data = await res.json();
-        const tbody = document.getElementById('tablaEquipos');
-
-        if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#6b7280;">No hay registros.</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = data.map(eq => {
-            let badgeClass = 'badge-no-aplica';
-            if (eq.cumplimiento_pmp === 'REALIZADO') badgeClass = 'badge-realizado';
-            if (eq.cumplimiento_pmp === 'NO REALIZADO') badgeClass = 'badge-no-realizado';
-            if (eq.cumplimiento_pmp === 'A FUTURO') badgeClass = 'badge-futuro';
-
-            return `
-                <tr>
-                    <td><strong>${eq.serial}</strong></td>
-                    <td>${eq.numero_inventario ? eq.numero_inventario : '-'}</td>
-                    <td>${eq.nombre} <br><small style="color:#6b7280;">${eq.marca} ${eq.modelo}</small></td>
-                    <td><strong>${eq.sede}</strong><br><small style="color:#6b7280;">${eq.ubicacion}</small></td>
-                    <td>${eq.frecuencia_pmp}</td>
-                    <td><span class="badge ${badgeClass}">${eq.cumplimiento_pmp}</span></td>
-                    <td style="font-size:12px; font-weight:bold; color:#475569;">${eq.observacion ? eq.observacion : '-'}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function descargarExcelConFiltro() {
-        const sede = document.getElementById('filtroSedeTabla').value;
-        const cumplimiento = document.getElementById('filtroCumplimiento').value;
-        window.location.href = `/descargar-excel?sede=${encodeURIComponent(sede)}&cumplimiento=${encodeURIComponent(cumplimiento)}`;
-    }
-
-    let timeoutBuscar;
-    function buscarEquipos() {
-        clearTimeout(timeoutBuscar);
-        timeoutBuscar = setTimeout(() => { cargarEquipos(); }, 300);
-    }
-
-    cargarListaSedes().then(() => cargarEquipos());
+    cargarListaSedes().then(() => cargarDatosDashboard());
 </script>
 
 </body>
