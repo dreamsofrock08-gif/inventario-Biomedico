@@ -55,11 +55,10 @@ def cargar_excel():
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
 
-        # Vaciamos la tabla para garantizar que el dashboard refleje exactamente la última carga
+        # Limpiar base previa para reflejar exactamente la nueva carga
         cursor.execute("DELETE FROM equipos_pmp")
 
         agregados = 0
-        col_obs_final = 84 if df_raw.shape[1] > 84 else (79 if df_raw.shape[1] > 79 else -1)
 
         for r_idx in range(4, len(df_raw)):
             nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else ""
@@ -76,22 +75,24 @@ def cargar_excel():
             frecuencia = str(df_raw.iloc[r_idx, 77]).strip() if pd.notna(df_raw.iloc[r_idx, 77]) else ""
             meses_prog = str(df_raw.iloc[r_idx, 78]).strip() if pd.notna(df_raw.iloc[r_idx, 78]) else ""
 
-            # Observación final
+            # Búsqueda dinámica del estado final (REALIZADO, NO REALIZADO, A FUTURO, NO APLICA, BAJA)
+            cumplimiento = "NO APLICA"
+            for col_search in [82, 83, 81, 80]:
+                if df_raw.shape[1] > col_search and pd.notna(df_raw.iloc[r_idx, col_search]):
+                    val_str = str(df_raw.iloc[r_idx, col_search]).strip().upper()
+                    if val_str in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
+                        cumplimiento = val_str
+                        break
+
+            # Observación final (Columna 84 o 79)
             observacion = ""
-            if col_obs_final != -1 and pd.notna(df_raw.iloc[r_idx, col_obs_final]):
-                observacion = str(df_raw.iloc[r_idx, col_obs_final]).strip()
+            if df_raw.shape[1] > 84 and pd.notna(df_raw.iloc[r_idx, 84]):
+                observacion = str(df_raw.iloc[r_idx, 84]).strip()
             elif df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
                 observacion = str(df_raw.iloc[r_idx, 79]).strip()
 
-            estado_raw = str(df_raw.iloc[r_idx, 82]).strip().upper() if df_raw.shape[1] > 82 and pd.notna(df_raw.iloc[r_idx, 82]) else "NO APLICA"
-
-            if estado_raw in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
-                cumplimiento = estado_raw
-            else:
-                cumplimiento = "NO APLICA"
-
-            # Banderas e indicadores personalizados
-            no_ubicado = "SI" if "NO UBICADO" in observacion.upper() else "NO"
+            # Banderas personalizadas solicitadas
+            no_ubicado = "SI" if "NO UBICADO" in observacion.upper() or "NO UBICADO" in str(df_raw.iloc[r_idx, 83] if df_raw.shape[1]>83 else "").upper() else "NO"
             a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
             checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
 
@@ -112,7 +113,7 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f"Base de datos del Dashboard cargada exitosamente. Registros procesados: {agregados}."
+            "message": f"Base de datos del Dashboard procesada con éxito. Registros importados: {agregados}."
         })
 
     except Exception as e:
@@ -144,7 +145,6 @@ def datos_dashboard():
     cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params)
     total_a_futuro = cursor.fetchone()[0]
 
-    # Agrupar por causales de no realizados
     cursor.execute(f'''
         SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Sin observación registrada') as razon, COUNT(*) 
         FROM equipos_pmp 
@@ -154,7 +154,6 @@ def datos_dashboard():
     ''', params)
     razones_no_realizado = [{"razon": row[0], "cantidad": row[1]} for row in cursor.fetchall()]
 
-    # Comparativo por sedes
     cursor.execute('''
         SELECT sede, 
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'REALIZADO' THEN 1 ELSE 0 END) as realizado,
@@ -215,7 +214,7 @@ def generar_informe_ejecutivo():
     total_a_futuro = cursor.fetchone()[0]
 
     cursor.execute(f'''
-        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Garantía / Apoyo tecnológico / Sin contrato N2') as razon, COUNT(*)
+        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Garantía extendida / Apoyo tecnológico / Sin contrato N2') as razon, COUNT(*)
         FROM equipos_pmp
         {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO APLICA'
         GROUP BY razon
@@ -252,7 +251,6 @@ def obtener_sedes():
 
 @app.route('/descargar-excel-dashboard', methods=['GET'])
 def descargar_excel_dashboard():
-    """Genera el reporte Excel con el esquema de celdas exactas solicitadas."""
     filter_sede = request.args.get('sede', '').strip()
     
     conn = sqlite3.connect(DB_NAME)
