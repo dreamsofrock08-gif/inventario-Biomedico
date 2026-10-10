@@ -72,27 +72,34 @@ def cargar_excel():
             num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else ""
             sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
             ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
-            frecuencia = str(df_raw.iloc[r_idx, 77]).strip() if pd.notna(df_raw.iloc[r_idx, 77]) else ""
-            meses_prog = str(df_raw.iloc[r_idx, 78]).strip() if pd.notna(df_raw.iloc[r_idx, 78]) else ""
+            
+            frecuencia = ""
+            if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
+                frecuencia = str(df_raw.iloc[r_idx, 77]).strip()
+
+            meses_prog = ""
+            if df_raw.shape[1] > 78 and pd.notna(df_raw.iloc[r_idx, 78]):
+                meses_prog = str(df_raw.iloc[r_idx, 78]).strip()
 
             # Búsqueda dinámica del estado final (REALIZADO, NO REALIZADO, A FUTURO, NO APLICA, BAJA)
             cumplimiento = "NO APLICA"
-            for col_search in [82, 83, 81, 80]:
-                if df_raw.shape[1] > col_search and pd.notna(df_raw.iloc[r_idx, col_search]):
-                    val_str = str(df_raw.iloc[r_idx, col_search]).strip().upper()
-                    if val_str in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
-                        cumplimiento = val_str
+            for col_search in range(df_raw.shape[1] - 1, 70, -1):
+                val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
+                if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
+                    cumplimiento = val_cell
+                    break
+
+            # Observación final (Revisar últimas columnas)
+            observacion = ""
+            for col_obs in [84, 83, 79]:
+                if df_raw.shape[1] > col_obs and pd.notna(df_raw.iloc[r_idx, col_obs]):
+                    val_obs = str(df_raw.iloc[r_idx, col_obs]).strip()
+                    if val_obs.upper() not in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'NAN', 'NONE']:
+                        observacion = val_obs
                         break
 
-            # Observación final (Columna 84 o 79)
-            observacion = ""
-            if df_raw.shape[1] > 84 and pd.notna(df_raw.iloc[r_idx, 84]):
-                observacion = str(df_raw.iloc[r_idx, 84]).strip()
-            elif df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
-                observacion = str(df_raw.iloc[r_idx, 79]).strip()
-
-            # Banderas personalizadas solicitadas
-            no_ubicado = "SI" if "NO UBICADO" in observacion.upper() or "NO UBICADO" in str(df_raw.iloc[r_idx, 83] if df_raw.shape[1]>83 else "").upper() else "NO"
+            # Banderas personalizadas
+            no_ubicado = "SI" if "NO UBICADO" in observacion.upper() else "NO"
             a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
             checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
 
