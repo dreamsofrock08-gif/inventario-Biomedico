@@ -82,18 +82,24 @@ def cargar_excel():
                 if val_meses and val_meses.upper() not in ['NAN', 'NONE', '']:
                     meses_prog = val_meses
 
-            # Búsqueda robusta de estado en las columnas disponibles (70 a 80)
+            # Búsqueda robusta de estado en las columnas
             cumplimiento = "NO APLICA"
-            for col_search in range(min(df_raw.shape[1] - 1, 80), 69, -1):
+            for col_search in range(min(df_raw.shape[1] - 1, 82), 29, -1):
                 val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
-                if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'CUMPLE', 'NO CUMPLE']:
-                    if val_cell == 'CUMPLE':
+                if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'CUMPLE', 'NO CUMPLE', 'OK', 'PG']:
+                    if val_cell in ['REALIZADO', 'CUMPLE', 'OK']:
                         cumplimiento = 'REALIZADO'
-                    elif val_cell == 'NO CUMPLE':
+                    elif val_cell in ['NO REALIZADO', 'NO CUMPLE']:
                         cumplimiento = 'NO REALIZADO'
+                    elif val_cell in ['A FUTURO', 'PG']:
+                        cumplimiento = 'A FUTURO'
                     else:
                         cumplimiento = val_cell
                     break
+
+            # Si por defecto quedó en NO APLICA pero tiene meses programados o estado general
+            if cumplimiento == 'NO APLICA' and meses_prog != 'NO PROGRAMADO':
+                cumplimiento = 'A FUTURO'
 
             # Extracción de observaciones reales (Columna 79)
             observacion_raw = ""
@@ -123,7 +129,7 @@ def cargar_excel():
             else:
                 no_ubicado = "NO"
 
-            a_futuro = "SI" if cumplimiento == "A FUTURO" or meses_prog != "NO PROGRAMADO" else "NO"
+            a_futuro = "SI" if cumplimiento == "A FUTURO" or (meses_prog != "NO PROGRAMADO" and meses_prog != "") else "NO"
             checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
 
             try:
@@ -292,14 +298,11 @@ def descargar_excel_dashboard():
             sede AS "SEDE",
             COALESCE(NULLIF(frecuencia_pmp, ''), 'NO ESPECIFICADA') AS "FRECUENCIA",
             cumplimiento_pmp AS "ESTADO",
-            CASE 
-                WHEN meses_programados IS NOT NULL AND TRIM(meses_programados) != '' AND TRIM(meses_programados) != 'NO PROGRAMADO' 
-                    THEN 'PROGRAMADO EN: ' || meses_programados
-                ELSE COALESCE(NULLIF(observacion, ''), 'MANTENIMIENTO AL DÍA') 
-            END AS "CAUSA / OBSERVACION",
+            COALESCE(NULLIF(observacion, ''), 'MANTENIMIENTO AL DÍA') AS "CAUSA / OBSERVACION",
             envio_correo AS "ENVIO CORREO / CHECKING",
             equipo_no_ubicado AS "EQUIPO NO UBICADO",
-            programado_resto_ano AS "PROGRAMADO RESTO DEL AÑO"
+            programado_resto_ano AS "PROGRAMADO RESTO DEL AÑO",
+            COALESCE(NULLIF(meses_programados, ''), 'NO PROGRAMADO') AS "MESES PROGRAMADOS"
         FROM equipos_pmp 
         WHERE 1=1
     '''
