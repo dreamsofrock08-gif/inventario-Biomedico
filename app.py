@@ -50,140 +50,100 @@ def cargar_excel():
 
     try:
         file_bytes = io.BytesIO(file.read())
-        
-        # Detectar si es el archivo base general (PMP Cuadrante) o un reporte exportado previamente
-        try:
-            df_test = pd.read_excel(file_bytes, sheet_name=0, header=None)
-            is_exported_report = False
-            # Si la fila 3 contiene los títulos exactos del reporte exportado
-            if df_test.shape[1] == 10 and str(df_test.iloc[0, 0]).strip().upper() == 'SERIAL':
-                is_exported_report = True
-        except Exception:
-            is_exported_report = False
+        df_raw = pd.read_excel(file_bytes, sheet_name=0, header=None)
 
-        file_bytes.seek(0)
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM equipos_pmp")
         agregados = 0
 
-        if is_exported_report:
-            df_rep = pd.read_excel(file_bytes, sheet_name=0, header=0)
-            for _, row in df_rep.iterrows():
-                serial = str(row.get('SERIAL', '')).strip()
-                num_inv = str(row.get('NUMERO DE INVENTARIO', '')).strip()
-                nombre = str(row.get('NOMBRE DEL EQUIPO', '')).strip()
-                sede = str(row.get('SEDE', '')).strip()
-                frecuencia = str(row.get('FRECUENCIA', '')).strip()
-                cumplimiento = str(row.get('ESTADO', '')).strip().upper()
-                observacion = str(row.get('CAUSA / OBSERVACION', '')).strip()
-                envio_correo = str(row.get('ENVIO CORREO / CHECKING', '')).strip()
-                no_ubicado = str(row.get('EQUIPO NO UBICADO', '')).strip().upper()
-                a_futuro = str(row.get('PROGRAMADO RESTO DEL AÑO', '')).strip().upper()
+        for r_idx in range(4, len(df_raw)):
+            nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else "EQUIPO SIN NOMBRE"
+            num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else "SIN INVENTARIO"
+            serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
 
-                if not serial:
-                    serial = f"INV-{agregados}-{num_inv}"
+            if not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
+                serial = f"INV-{r_idx}-{num_inv}"
 
-                try:
-                    cursor.execute('''
-                        INSERT INTO equipos_pmp (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion,
-                                                frecuencia_pmp, meses_programados, cumplimiento_pmp, observacion,
-                                                envio_correo, equipo_no_ubicado, programado_resto_ano)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (nombre, "GENÉRICO", "GENÉRICO", serial, num_inv, sede, "SEDE GENERAL", 
-                          frecuencia, "VARIOS", cumplimiento, observacion, envio_correo, no_ubicado, a_futuro))
-                    agregados += 1
-                except sqlite3.IntegrityError:
-                    pass
-        else:
-            df_raw = pd.read_excel(file_bytes, sheet_name=0, header=None)
-            for r_idx in range(4, len(df_raw)):
-                nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else "EQUIPO SIN NOMBRE"
-                num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else "SIN INVENTARIO"
-                serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
+            marca = str(df_raw.iloc[r_idx, 1]).strip() if pd.notna(df_raw.iloc[r_idx, 1]) else ""
+            modelo = str(df_raw.iloc[r_idx, 2]).strip() if pd.notna(df_raw.iloc[r_idx, 2]) else ""
+            sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
+            ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
+            
+            frecuencia = "NO ESPECIFICADA"
+            if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
+                val_frec = str(df_raw.iloc[r_idx, 77]).strip().upper()
+                if val_frec and val_frec not in ['NAN', 'NONE']:
+                    frecuencia = val_frec
 
-                if not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
-                    serial = f"INV-{r_idx}-{num_inv}"
+            meses_prog = "NO PROGRAMADO"
+            if df_raw.shape[1] > 78 and pd.notna(df_raw.iloc[r_idx, 78]):
+                val_meses = str(df_raw.iloc[r_idx, 78]).strip()
+                if val_meses and val_meses.upper() not in ['NAN', 'NONE', '']:
+                    meses_prog = val_meses
 
-                marca = str(df_raw.iloc[r_idx, 1]).strip() if pd.notna(df_raw.iloc[r_idx, 1]) else ""
-                modelo = str(df_raw.iloc[r_idx, 2]).strip() if pd.notna(df_raw.iloc[r_idx, 2]) else ""
-                sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
-                ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
-                
-                frecuencia = "NO ESPECIFICADA"
-                if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
-                    val_frec = str(df_raw.iloc[r_idx, 77]).strip().upper()
-                    if val_frec and val_frec not in ['NAN', 'NONE']:
-                        frecuencia = val_frec
-
-                meses_prog = ""
-                if df_raw.shape[1] > 78 and pd.notna(df_raw.iloc[r_idx, 78]):
-                    meses_prog = str(df_raw.iloc[r_idx, 78]).strip()
-
-                # Búsqueda dinámica de estado con sinónimos
-                cumplimiento = "NO APLICA"
-                for col_search in range(df_raw.shape[1] - 1, 70, -1):
-                    val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
-                    if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'CUMPLE', 'NO CUMPLE']:
-                        if val_cell == 'CUMPLE':
-                            cumplimiento = 'REALIZADO'
-                        elif val_cell == 'NO CUMPLE':
-                            cumplimiento = 'NO REALIZADO'
-                        else:
-                            cumplimiento = val_cell
-                        break
-
-                # Observación con análisis de sinónimos
-                observacion_raw = ""
-                for col_obs in [84, 83, 79]:
-                    if df_raw.shape[1] > col_obs and pd.notna(df_raw.iloc[r_idx, col_obs]):
-                        val_o = str(df_raw.iloc[r_idx, col_obs]).strip()
-                        if val_o.upper() not in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'NAN', 'NONE']:
-                            observacion_raw = val_o
-                            break
-
-                if observacion_raw:
-                    observacion = observacion_raw
-                else:
-                    if cumplimiento == 'REALIZADO':
-                        observacion = "MANTENIMIENTO EJECUTADO"
-                    elif cumplimiento == 'A FUTURO':
-                        observacion = "PROGRAMADO EN CRONOGRAMA"
-                    elif cumplimiento == 'NO REALIZADO':
-                        observacion = "PENDIENTE DE UBICACIÓN / GESTIÓN"
-                    elif cumplimiento == 'NO APLICA':
-                        observacion = "EXCLUIDO POR MODALIDAD DE CONTRATO O APOYO"
+            # Búsqueda robusta de estado en las columnas disponibles (70 a 80)
+            cumplimiento = "NO APLICA"
+            for col_search in range(min(df_raw.shape[1] - 1, 80), 69, -1):
+                val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
+                if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'CUMPLE', 'NO CUMPLE']:
+                    if val_cell == 'CUMPLE':
+                        cumplimiento = 'REALIZADO'
+                    elif val_cell == 'NO CUMPLE':
+                        cumplimiento = 'NO REALIZADO'
                     else:
-                        observacion = "EQUIPO DADO DE BAJA"
+                        cumplimiento = val_cell
+                    break
 
-                # Detección inteligente de sinónimos para equipo no ubicado
-                obs_upper = observacion.upper()
-                if any(syn in obs_upper for syn in ['NO UBICADO', 'NO LOCALIZADO', 'TRASLADADO', 'NO SE ENCUENTRA']):
-                    no_ubicado = "SI"
+            # Extracción de observaciones reales (Columna 79)
+            observacion_raw = ""
+            if df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
+                val_o = str(df_raw.iloc[r_idx, 79]).strip()
+                if val_o.upper() not in ['NAN', 'NONE', '']:
+                    observacion_raw = val_o
+
+            if observacion_raw:
+                observacion = observacion_raw
+            else:
+                if cumplimiento == 'REALIZADO':
+                    observacion = "MANTENIMIENTO EJECUTADO"
+                elif cumplimiento == 'A FUTURO':
+                    observacion = f"PROGRAMADO EN CRONOGRAMA: {meses_prog}"
+                elif cumplimiento == 'NO REALIZADO':
+                    observacion = "PENDIENTE DE UBICACIÓN / GESTIÓN"
+                elif cumplimiento == 'NO APLICA':
+                    observacion = "EXCLUIDO POR MODALIDAD DE CONTRATO O APOYO"
                 else:
-                    no_ubicado = "NO"
+                    observacion = "EQUIPO DADO DE BAJA"
 
-                a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
-                checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
+            # Detección de sinónimos para equipo no ubicado
+            obs_upper = observacion.upper()
+            if any(syn in obs_upper for syn in ['NO UBICADO', 'NO LOCALIZADO', 'TRASLADADO', 'NO SE ENCUENTRA']):
+                no_ubicado = "SI"
+            else:
+                no_ubicado = "NO"
 
-                try:
-                    cursor.execute('''
-                        INSERT INTO equipos_pmp (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion,
-                                                frecuencia_pmp, meses_programados, cumplimiento_pmp, observacion,
-                                                envio_correo, equipo_no_ubicado, programado_resto_ano)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, frecuencia, meses_prog, 
-                          cumplimiento, observacion, checking_correo, no_ubicado, a_futuro))
-                    agregados += 1
-                except sqlite3.IntegrityError:
-                    pass
+            a_futuro = "SI" if cumplimiento == "A FUTURO" or meses_prog != "NO PROGRAMADO" else "NO"
+            checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
+
+            try:
+                cursor.execute('''
+                    INSERT INTO equipos_pmp (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion,
+                                            frecuencia_pmp, meses_programados, cumplimiento_pmp, observacion,
+                                            envio_correo, equipo_no_ubicado, programado_resto_ano)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, frecuencia, meses_prog, 
+                      cumplimiento, observacion, checking_correo, no_ubicado, a_futuro))
+                agregados += 1
+            except sqlite3.IntegrityError:
+                pass
 
         conn.commit()
         conn.close()
 
         return jsonify({
             "status": "success",
-            "message": f"Archivo procesado correctamente. Registros importados: {agregados}."
+            "message": f"Base de datos procesada correctamente. Registros importados: {agregados}."
         })
 
     except Exception as e:
@@ -212,7 +172,7 @@ def datos_dashboard():
     cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'", params)
     total_no_realizado = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params)
+    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND (UPPER(cumplimiento_pmp) = 'A FUTURO' OR UPPER(programado_resto_ano) = 'SI')", params)
     total_a_futuro = cursor.fetchone()[0]
 
     cursor.execute(f'''
@@ -228,7 +188,7 @@ def datos_dashboard():
         SELECT sede, 
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'REALIZADO' THEN 1 ELSE 0 END) as realizado,
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'NO REALIZADO' THEN 1 ELSE 0 END) as no_realizado,
-               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'A FUTURO' THEN 1 ELSE 0 END) as a_futuro
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'A FUTURO' OR UPPER(programado_resto_ano) = 'SI' THEN 1 ELSE 0 END) as a_futuro
         FROM equipos_pmp 
         WHERE sede IS NOT NULL AND TRIM(sede) != '' AND UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')
         GROUP BY sede
@@ -280,7 +240,7 @@ def generar_informe_ejecutivo():
     cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'", params_all)
     total_no_realizado = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where_all} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params_all)
+    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where_all} AND (UPPER(cumplimiento_pmp) = 'A FUTURO' OR UPPER(programado_resto_ano) = 'SI')", params_all)
     total_a_futuro = cursor.fetchone()[0]
 
     cursor.execute(f'''
@@ -332,7 +292,11 @@ def descargar_excel_dashboard():
             sede AS "SEDE",
             COALESCE(NULLIF(frecuencia_pmp, ''), 'NO ESPECIFICADA') AS "FRECUENCIA",
             cumplimiento_pmp AS "ESTADO",
-            COALESCE(NULLIF(observacion, ''), 'MANTENIMIENTO AL DÍA') AS "CAUSA / OBSERVACION",
+            CASE 
+                WHEN meses_programados IS NOT NULL AND TRIM(meses_programados) != '' AND TRIM(meses_programados) != 'NO PROGRAMADO' 
+                    THEN 'PROGRAMADO EN: ' || meses_programados
+                ELSE COALESCE(NULLIF(observacion, ''), 'MANTENIMIENTO AL DÍA') 
+            END AS "CAUSA / OBSERVACION",
             envio_correo AS "ENVIO CORREO / CHECKING",
             equipo_no_ubicado AS "EQUIPO NO UBICADO",
             programado_resto_ano AS "PROGRAMADO RESTO DEL AÑO"
