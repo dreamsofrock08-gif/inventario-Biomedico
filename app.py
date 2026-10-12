@@ -82,7 +82,7 @@ def cargar_excel():
                 if val_meses and val_meses.upper() not in ['NAN', 'NONE', '']:
                     meses_prog = val_meses
 
-            # Búsqueda robusta de estado en las columnas
+            # Detección estricta de estado jerárquico
             cumplimiento = "NO APLICA"
             for col_search in range(min(df_raw.shape[1] - 1, 82), 29, -1):
                 val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
@@ -97,11 +97,10 @@ def cargar_excel():
                         cumplimiento = val_cell
                     break
 
-            # Si por defecto quedó en NO APLICA pero tiene meses programados o estado general
             if cumplimiento == 'NO APLICA' and meses_prog != 'NO PROGRAMADO':
                 cumplimiento = 'A FUTURO'
 
-            # Extracción de observaciones reales (Columna 79)
+            # Extracción de observaciones reales
             observacion_raw = ""
             if df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
                 val_o = str(df_raw.iloc[r_idx, 79]).strip()
@@ -122,14 +121,13 @@ def cargar_excel():
                 else:
                     observacion = "EQUIPO DADO DE BAJA"
 
-            # Detección de sinónimos para equipo no ubicado
             obs_upper = observacion.upper()
             if any(syn in obs_upper for syn in ['NO UBICADO', 'NO LOCALIZADO', 'TRASLADADO', 'NO SE ENCUENTRA']):
                 no_ubicado = "SI"
             else:
                 no_ubicado = "NO"
 
-            a_futuro = "SI" if cumplimiento == "A FUTURO" or (meses_prog != "NO PROGRAMADO" and meses_prog != "") else "NO"
+            a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
             checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
 
             try:
@@ -178,7 +176,7 @@ def datos_dashboard():
     cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'", params)
     total_no_realizado = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND (UPPER(cumplimiento_pmp) = 'A FUTURO' OR UPPER(programado_resto_ano) = 'SI')", params)
+    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params)
     total_a_futuro = cursor.fetchone()[0]
 
     cursor.execute(f'''
@@ -194,7 +192,7 @@ def datos_dashboard():
         SELECT sede, 
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'REALIZADO' THEN 1 ELSE 0 END) as realizado,
                SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'NO REALIZADO' THEN 1 ELSE 0 END) as no_realizado,
-               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'A FUTURO' OR UPPER(programado_resto_ano) = 'SI' THEN 1 ELSE 0 END) as a_futuro
+               SUM(CASE WHEN UPPER(cumplimiento_pmp) = 'A FUTURO' THEN 1 ELSE 0 END) as a_futuro
         FROM equipos_pmp 
         WHERE sede IS NOT NULL AND TRIM(sede) != '' AND UPPER(cumplimiento_pmp) NOT IN ('NO APLICA', 'BAJA')
         GROUP BY sede
@@ -246,7 +244,7 @@ def generar_informe_ejecutivo():
     cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO REALIZADO'", params_all)
     total_no_realizado = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where_all} AND (UPPER(cumplimiento_pmp) = 'A FUTURO' OR UPPER(programado_resto_ano) = 'SI')", params_all)
+    cursor.execute(f"SELECT COUNT(*) FROM equipos_pmp {sql_where_all} AND UPPER(cumplimiento_pmp) = 'A FUTURO'", params_all)
     total_a_futuro = cursor.fetchone()[0]
 
     cursor.execute(f'''
