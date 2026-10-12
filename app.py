@@ -82,7 +82,6 @@ def cargar_excel():
                 if val_meses and val_meses.upper() not in ['NAN', 'NONE', '']:
                     meses_prog = val_meses
 
-            # Detección estricta de estado jerárquico
             cumplimiento = "NO APLICA"
             for col_search in range(min(df_raw.shape[1] - 1, 82), 29, -1):
                 val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
@@ -100,7 +99,6 @@ def cargar_excel():
             if cumplimiento == 'NO APLICA' and meses_prog != 'NO PROGRAMADO':
                 cumplimiento = 'A FUTURO'
 
-            # Extracción de observaciones reales
             observacion_raw = ""
             if df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
                 val_o = str(df_raw.iloc[r_idx, 79]).strip()
@@ -152,6 +150,18 @@ def cargar_excel():
 
     except Exception as e:
         return jsonify({"status": "error", "message": f"Error procesando archivo: {str(e)}"}), 500
+
+@app.route('/vaciar-bd', methods=['POST'])
+def vaciar_bd():
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM equipos_pmp")
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "message": "Base de datos vaciada correctamente."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error al vaciar la base de datos: {str(e)}"}), 500
 
 @app.route('/datos-dashboard', methods=['GET'])
 def datos_dashboard():
