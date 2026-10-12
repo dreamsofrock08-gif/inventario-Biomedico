@@ -50,91 +50,140 @@ def cargar_excel():
 
     try:
         file_bytes = io.BytesIO(file.read())
-        df_raw = pd.read_excel(file_bytes, sheet_name=0, header=None)
+        
+        # Detectar si es el archivo base general (PMP Cuadrante) o un reporte exportado previamente
+        try:
+            df_test = pd.read_excel(file_bytes, sheet_name=0, header=None)
+            is_exported_report = False
+            # Si la fila 3 contiene los títulos exactos del reporte exportado
+            if df_test.shape[1] == 10 and str(df_test.iloc[0, 0]).strip().upper() == 'SERIAL':
+                is_exported_report = True
+        except Exception:
+            is_exported_report = False
 
+        file_bytes.seek(0)
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-
         cursor.execute("DELETE FROM equipos_pmp")
         agregados = 0
 
-        for r_idx in range(4, len(df_raw)):
-            nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else "EQUIPO SIN NOMBRE"
-            num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else "SIN INVENTARIO"
-            serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
+        if is_exported_report:
+            df_rep = pd.read_excel(file_bytes, sheet_name=0, header=0)
+            for _, row in df_rep.iterrows():
+                serial = str(row.get('SERIAL', '')).strip()
+                num_inv = str(row.get('NUMERO DE INVENTARIO', '')).strip()
+                nombre = str(row.get('NOMBRE DEL EQUIPO', '')).strip()
+                sede = str(row.get('SEDE', '')).strip()
+                frecuencia = str(row.get('FRECUENCIA', '')).strip()
+                cumplimiento = str(row.get('ESTADO', '')).strip().upper()
+                observacion = str(row.get('CAUSA / OBSERVACION', '')).strip()
+                envio_correo = str(row.get('ENVIO CORREO / CHECKING', '')).strip()
+                no_ubicado = str(row.get('EQUIPO NO UBICADO', '')).strip().upper()
+                a_futuro = str(row.get('PROGRAMADO RESTO DEL AÑO', '')).strip().upper()
 
-            if not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
-                serial = f"INV-{r_idx}-{num_inv}"
+                if not serial:
+                    serial = f"INV-{agregados}-{num_inv}"
 
-            marca = str(df_raw.iloc[r_idx, 1]).strip() if pd.notna(df_raw.iloc[r_idx, 1]) else ""
-            modelo = str(df_raw.iloc[r_idx, 2]).strip() if pd.notna(df_raw.iloc[r_idx, 2]) else ""
-            sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
-            ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
-            
-            frecuencia = "NO ESPECIFICADA"
-            if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
-                val_frec = str(df_raw.iloc[r_idx, 77]).strip().upper()
-                if val_frec and val_frec not in ['NAN', 'NONE']:
-                    frecuencia = val_frec
+                try:
+                    cursor.execute('''
+                        INSERT INTO equipos_pmp (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion,
+                                                frecuencia_pmp, meses_programados, cumplimiento_pmp, observacion,
+                                                envio_correo, equipo_no_ubicado, programado_resto_ano)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (nombre, "GENÉRICO", "GENÉRICO", serial, num_inv, sede, "SEDE GENERAL", 
+                          frecuencia, "VARIOS", cumplimiento, observacion, envio_correo, no_ubicado, a_futuro))
+                    agregados += 1
+                except sqlite3.IntegrityError:
+                    pass
+        else:
+            df_raw = pd.read_excel(file_bytes, sheet_name=0, header=None)
+            for r_idx in range(4, len(df_raw)):
+                nombre = str(df_raw.iloc[r_idx, 0]).strip() if pd.notna(df_raw.iloc[r_idx, 0]) else "EQUIPO SIN NOMBRE"
+                num_inv = str(df_raw.iloc[r_idx, 4]).strip() if pd.notna(df_raw.iloc[r_idx, 4]) else "SIN INVENTARIO"
+                serial = str(df_raw.iloc[r_idx, 3]).strip() if pd.notna(df_raw.iloc[r_idx, 3]) else ""
 
-            meses_prog = ""
-            if df_raw.shape[1] > 78 and pd.notna(df_raw.iloc[r_idx, 78]):
-                meses_prog = str(df_raw.iloc[r_idx, 78]).strip()
+                if not serial or serial.upper() in ['NAN', 'NONE', 'NO APLICA', 'SIN SERIE', '']:
+                    serial = f"INV-{r_idx}-{num_inv}"
 
-            # Búsqueda dinámica de estado
-            cumplimiento = "NO APLICA"
-            for col_search in [82, 83, 81, 80]:
-                if df_raw.shape[1] > col_search and pd.notna(df_raw.iloc[r_idx, col_search]):
-                    val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper()
-                    if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA']:
-                        cumplimiento = val_cell
+                marca = str(df_raw.iloc[r_idx, 1]).strip() if pd.notna(df_raw.iloc[r_idx, 1]) else ""
+                modelo = str(df_raw.iloc[r_idx, 2]).strip() if pd.notna(df_raw.iloc[r_idx, 2]) else ""
+                sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
+                ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
+                
+                frecuencia = "NO ESPECIFICADA"
+                if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
+                    val_frec = str(df_raw.iloc[r_idx, 77]).strip().upper()
+                    if val_frec and val_frec not in ['NAN', 'NONE']:
+                        frecuencia = val_frec
+
+                meses_prog = ""
+                if df_raw.shape[1] > 78 and pd.notna(df_raw.iloc[r_idx, 78]):
+                    meses_prog = str(df_raw.iloc[r_idx, 78]).strip()
+
+                # Búsqueda dinámica de estado con sinónimos
+                cumplimiento = "NO APLICA"
+                for col_search in range(df_raw.shape[1] - 1, 70, -1):
+                    val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
+                    if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'CUMPLE', 'NO CUMPLE']:
+                        if val_cell == 'CUMPLE':
+                            cumplimiento = 'REALIZADO'
+                        elif val_cell == 'NO CUMPLE':
+                            cumplimiento = 'NO REALIZADO'
+                        else:
+                            cumplimiento = val_cell
                         break
 
-            # Observación con relleno inteligente según estado
-            observacion_raw = ""
-            for col_obs in [84, 83, 79]:
-                if df_raw.shape[1] > col_obs and pd.notna(df_raw.iloc[r_idx, col_obs]):
-                    val_o = str(df_raw.iloc[r_idx, col_obs]).strip()
-                    if val_o.upper() not in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'NAN', 'NONE']:
-                        observacion_raw = val_o
-                        break
+                # Observación con análisis de sinónimos
+                observacion_raw = ""
+                for col_obs in [84, 83, 79]:
+                    if df_raw.shape[1] > col_obs and pd.notna(df_raw.iloc[r_idx, col_obs]):
+                        val_o = str(df_raw.iloc[r_idx, col_obs]).strip()
+                        if val_o.upper() not in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'NAN', 'NONE']:
+                            observacion_raw = val_o
+                            break
 
-            if observacion_raw:
-                observacion = observacion_raw
-            else:
-                if cumplimiento == 'REALIZADO':
-                    observacion = "MANTENIMIENTO EJECUTADO"
-                elif cumplimiento == 'A FUTURO':
-                    observacion = "PROGRAMADO EN CRONOGRAMA"
-                elif cumplimiento == 'NO REALIZADO':
-                    observacion = "PENDIENTE DE UBICACIÓN / GESTIÓN"
-                elif cumplimiento == 'NO APLICA':
-                    observacion = "EXCLUIDO POR MODALIDAD DE CONTRATO O APOYO"
+                if observacion_raw:
+                    observacion = observacion_raw
                 else:
-                    observacion = "EQUIPO DADO DE BAJA"
+                    if cumplimiento == 'REALIZADO':
+                        observacion = "MANTENIMIENTO EJECUTADO"
+                    elif cumplimiento == 'A FUTURO':
+                        observacion = "PROGRAMADO EN CRONOGRAMA"
+                    elif cumplimiento == 'NO REALIZADO':
+                        observacion = "PENDIENTE DE UBICACIÓN / GESTIÓN"
+                    elif cumplimiento == 'NO APLICA':
+                        observacion = "EXCLUIDO POR MODALIDAD DE CONTRATO O APOYO"
+                    else:
+                        observacion = "EQUIPO DADO DE BAJA"
 
-            no_ubicado = "SI" if "NO UBICADO" in observacion.upper() else "NO"
-            a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
-            checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
+                # Detección inteligente de sinónimos para equipo no ubicado
+                obs_upper = observacion.upper()
+                if any(syn in obs_upper for syn in ['NO UBICADO', 'NO LOCALIZADO', 'TRASLADADO', 'NO SE ENCUENTRA']):
+                    no_ubicado = "SI"
+                else:
+                    no_ubicado = "NO"
 
-            try:
-                cursor.execute('''
-                    INSERT INTO equipos_pmp (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion,
-                                            frecuencia_pmp, meses_programados, cumplimiento_pmp, observacion,
-                                            envio_correo, equipo_no_ubicado, programado_resto_ano)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, frecuencia, meses_prog, 
-                      cumplimiento, observacion, checking_correo, no_ubicado, a_futuro))
-                agregados += 1
-            except sqlite3.IntegrityError:
-                pass
+                a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
+                checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
+
+                try:
+                    cursor.execute('''
+                        INSERT INTO equipos_pmp (nombre, marca, modelo, serial, numero_inventario, sede, ubicacion,
+                                                frecuencia_pmp, meses_programados, cumplimiento_pmp, observacion,
+                                                envio_correo, equipo_no_ubicado, programado_resto_ano)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (nombre, marca, modelo, serial, num_inv, sede, ubicacion, frecuencia, meses_prog, 
+                          cumplimiento, observacion, checking_correo, no_ubicado, a_futuro))
+                    agregados += 1
+                except sqlite3.IntegrityError:
+                    pass
 
         conn.commit()
         conn.close()
 
         return jsonify({
             "status": "success",
-            "message": f"Base de datos procesada con éxito. Total registros importados: {agregados}."
+            "message": f"Archivo procesado correctamente. Registros importados: {agregados}."
         })
 
     except Exception as e:
