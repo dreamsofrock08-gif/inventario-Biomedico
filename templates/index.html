@@ -19,6 +19,7 @@
         .btn { background-color: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 4px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px; }
         .btn-excel { background-color: #059669; }
         .btn-informe { background-color: #7c3aed; }
+        .btn-danger { background-color: #dc2626; }
         .btn:hover { opacity: 0.9; }
 
         .alert { padding: 12px; border-radius: 4px; margin-top: 15px; display: none; font-size: 14px; }
@@ -66,14 +67,17 @@
         <button onclick="abrirModalInforme()" class="btn btn-informe">📄 Generar Informe Ejecutivo de Exclusiones</button>
     </div>
 
-    <!-- CARGA DE ARCHIVO -->
+    <!-- CARGA Y GESTIÓN DE BASE DE DATOS -->
     <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <h3 style="margin: 0;">📁 Cargar Base de Datos Oficial (Excel)</h3>
-            <a href="#" onclick="descargarExcelDashboard()" class="btn btn-excel">📥 Descargar Reporte Excel Completo</a>
+            <div>
+                <button onclick="vaciarBaseDatos()" class="btn btn-danger" style="margin-right: 10px;">🗑️ Vaciar Base de Datos</button>
+                <a href="#" onclick="descargarExcelDashboard()" class="btn btn-excel">📥 Descargar Reporte Excel Completo</a>
+            </div>
         </div>
         <p style="font-size: 13px; color: #64748b; margin-top: 6px;">
-            Sube el archivo Excel oficial. El sistema procesará el Dashboard y habilitará la descarga con las 10 columnas personalizadas.
+            Sube el archivo Excel oficial. El sistema procesará el Dashboard y habilitará la descarga con las 11 columnas personalizadas.
         </p>
         
         <form id="excelForm" enctype="multipart/form-data" style="margin-top: 15px;">
@@ -355,6 +359,23 @@
             btnSubir.innerText = 'Procesar Archivo';
         }
     });
+
+    async function vaciarBaseDatos() {
+        if (!confirm('¿Estás seguro de vaciar la base de datos del Dashboard? Se eliminarán todos los registros cargados.')) return;
+        
+        try {
+            const res = await fetch('/vaciar-bd', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        } catch (err) {
+            alert('Error de conexión al vaciar la base de datos.');
+        }
+    }
 
     function descargarExcelDashboard() {
         const sede = document.getElementById('filtroSedeDashboard').value;
