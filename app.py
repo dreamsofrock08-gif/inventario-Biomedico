@@ -8,6 +8,9 @@ app = Flask(__name__)
 CORS(app)
 DB_NAME = "dashboard_pmp.db"
 
+MESES_PASADOS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE']
+MESES_FUTUROS = ['NOVIEMBRE', 'DICIEMBRE']
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -69,6 +72,7 @@ def cargar_excel():
             modelo = str(df_raw.iloc[r_idx, 2]).strip() if pd.notna(df_raw.iloc[r_idx, 2]) else ""
             sede = str(df_raw.iloc[r_idx, 21]).strip() if pd.notna(df_raw.iloc[r_idx, 21]) else "Sin Sede"
             ubicacion = str(df_raw.iloc[r_idx, 22]).strip() if pd.notna(df_raw.iloc[r_idx, 22]) else ""
+            modalidad = str(df_raw.iloc[r_idx, 24]).strip().upper() if df_raw.shape[1] > 24 and pd.notna(df_raw.iloc[r_idx, 24]) else ""
             
             frecuencia = "NO ESPECIFICADA"
             if df_raw.shape[1] > 77 and pd.notna(df_raw.iloc[r_idx, 77]):
@@ -82,49 +86,42 @@ def cargar_excel():
                 if val_meses and val_meses.upper() not in ['NAN', 'NONE', '']:
                     meses_prog = val_meses
 
-            cumplimiento = "NO APLICA"
-            for col_search in range(min(df_raw.shape[1] - 1, 82), 29, -1):
-                val_cell = str(df_raw.iloc[r_idx, col_search]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_search]) else ""
-                if val_cell in ['REALIZADO', 'NO REALIZADO', 'A FUTURO', 'NO APLICA', 'BAJA', 'CUMPLE', 'NO CUMPLE', 'OK', 'PG']:
-                    if val_cell in ['REALIZADO', 'CUMPLE', 'OK']:
-                        cumplimiento = 'REALIZADO'
-                    elif val_cell in ['NO REALIZADO', 'NO CUMPLE']:
-                        cumplimiento = 'NO REALIZADO'
-                    elif val_cell in ['A FUTURO', 'PG']:
-                        cumplimiento = 'A FUTURO'
-                    else:
-                        cumplimiento = val_cell
-                    break
-
-            if cumplimiento == 'NO APLICA' and meses_prog != 'NO PROGRAMADO':
-                cumplimiento = 'A FUTURO'
-
-            observacion_raw = ""
-            if df_raw.shape[1] > 79 and pd.notna(df_raw.iloc[r_idx, 79]):
-                val_o = str(df_raw.iloc[r_idx, 79]).strip()
-                if val_o.upper() not in ['NAN', 'NONE', '']:
-                    observacion_raw = val_o
-
-            if observacion_raw:
-                observacion = observacion_raw
+            # --- AUDITORÍA DE ESTADO DE CUMPLIMIENTO PMP ---
+            if modalidad == 'BAJA' or 'BAJA' in str(df_raw.iloc[r_idx, 0]).upper():
+                cumplimiento = 'BAJA'
+                observacion = "EQUIPO DADO DE BAJA / OBSOLESCENCIA"
+            elif modalidad in ['GARANTÍA', 'GARANTIA', 'APOYO TECNOLOGICO', 'APOYO TECNOLÓGICO', 'ORDEN CLAUSULADA'] or frecuencia in ['NO REQUIERE', 'NO APLICA', 'LIBRE DE MANTENIMIENTO']:
+                cumplimiento = 'NO APLICA'
+                observacion = f"EXCLUIDO DE PMP POR MODALIDAD ({modalidad if modalidad else frecuencia})"
             else:
-                if cumplimiento == 'REALIZADO':
-                    observacion = "MANTENIMIENTO EJECUTADO"
-                elif cumplimiento == 'A FUTURO':
-                    observacion = f"PROGRAMADO EN CRONOGRAMA: {meses_prog}"
-                elif cumplimiento == 'NO REALIZADO':
-                    observacion = "PENDIENTE DE UBICACIÓN / GESTIÓN"
-                elif cumplimiento == 'NO APLICA':
-                    observacion = "EXCLUIDO POR MODALIDAD DE CONTRATO O APOYO"
+                tiene_mora = False
+                tiene_realizado = False
+                tiene_futuro = False
+
+                for col_idx in range(30, min(df_raw.shape[1], 76)):
+                    val_cell = str(df_raw.iloc[r_idx, col_idx]).strip().upper() if pd.notna(df_raw.iloc[r_idx, col_idx]) else ""
+                    mes_nombre = str(df_raw.iloc[2, col_idx]).strip().upper() if pd.notna(df_raw.iloc[2, col_idx]) else ""
+
+                    if val_cell in ['OK', 'CUMPLE', 'REALIZADO']:
+                        tiene_realizado = True
+                    elif val_cell in ['PG', 'PA', 'NB', 'PENDIENTE', 'NO REALIZADO', 'IF', 'R']:
+                        if any(m in mes_nombre for m in MESES_PASADOS):
+                            tiene_mora = True
+                        elif any(m in mes_nombre for m in MESES_FUTUROS):
+                            tiene_futuro = True
+
+                if tiene_mora:
+                    cumplimiento = 'NO REALIZADO'
+                    observacion = "PENDIENTE DE EJECUCIÓN (BACKLOG MESES PASADOS)"
+                elif tiene_futuro and not tiene_realizado:
+                    cumplimiento = 'A FUTURO'
+                    observacion = f"PROGRAMADO EN CRONOGRAMA RESTO DEL AÑO ({meses_prog})"
                 else:
-                    observacion = "EQUIPO DADO DE BAJA"
+                    cumplimiento = 'REALIZADO'
+                    observacion = "MANTENIMIENTO EJECUTADO Y AL DÍA"
 
             obs_upper = observacion.upper()
-            if any(syn in obs_upper for syn in ['NO UBICADO', 'NO LOCALIZADO', 'TRASLADADO', 'NO SE ENCUENTRA']):
-                no_ubicado = "SI"
-            else:
-                no_ubicado = "NO"
-
+            no_ubicado = "SI" if any(syn in obs_upper for syn in ['NO UBICADO', 'NO LOCALIZADO', 'TRASLADADO', 'NO SE ENCUENTRA']) else "NO"
             a_futuro = "SI" if cumplimiento == "A FUTURO" else "NO"
             checking_correo = "PENDIENTE" if cumplimiento == "NO REALIZADO" else "NO REQUIERE"
 
@@ -145,7 +142,7 @@ def cargar_excel():
 
         return jsonify({
             "status": "success",
-            "message": f"Base de datos procesada correctamente. Registros importados: {agregados}."
+            "message": f"Base de datos procesada correctamente. Registros auditados: {agregados}."
         })
 
     except Exception as e:
@@ -258,7 +255,7 @@ def generar_informe_ejecutivo():
     total_a_futuro = cursor.fetchone()[0]
 
     cursor.execute(f'''
-        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Garantía extendida / Apoyo tecnológico / Sin contrato N2') as razon, COUNT(*)
+        SELECT COALESCE(NULLIF(TRIM(observacion), ''), 'Excluido por modalidad de contrato o frecuencia') as razon, COUNT(*)
         FROM equipos_pmp
         {sql_where_all} AND UPPER(cumplimiento_pmp) = 'NO APLICA'
         GROUP BY razon
